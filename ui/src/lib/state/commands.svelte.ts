@@ -12,6 +12,10 @@ import { stepOf, pendingOf, byUrgency } from "./activity";
 import { fillPrompt, variablesOf, type SavedPrompt } from "./prompts.svelte";
 import type { Conversation } from "./conversations.svelte";
 import { toast } from "svelte-sonner";
+import { termPanel } from "./termpanel.svelte";
+
+/** Keyboard focus is in the terminal panel. */
+const inTermPanel = () => !!document.activeElement?.closest?.(".terminal-panel");
 
 /** The conversation in the focused pane's active tab. */
 export function currentConv() {
@@ -95,7 +99,8 @@ export const actions: Record<string, () => void> = {
 	prompts: () => openSettings("prompts"),
 	shortcuts: () => openSettings("keys"),
 	"new-conversation": () => ui.openNewConversation(),
-	"new-terminal": () => ui.openTerminal(),
+	"new-terminal": () => termPanel.newTerminal(),
+	"new-terminal-tab": () => ui.openTerminal(),
 	"open-folder": () => {
 		call<string | null>("pick_folder")
 			.then((dir) => dir && ui.openNewConversation(dir))
@@ -108,9 +113,10 @@ export const actions: Record<string, () => void> = {
 	search: () => (ui.searchOpen = !ui.searchOpen),
 	"toggle-sidebar": () => ui.toggleSidebar(),
 	"toggle-progress": () => prefs.set("progressPanel", !prefs.progressPanel),
-	"toggle-terminal": () => {
-		const c = currentConv();
-		if (c) c.drawer = !c.drawer;
+	"toggle-terminal": () => termPanel.toggle(),
+	"maximize-terminal": () => {
+		if (!termPanel.open) termPanel.toggle();
+		termPanel.toggleMaximize();
 	},
 	"zoom-in": () => prefs.zoom(0.1),
 	"zoom-out": () => prefs.zoom(-0.1),
@@ -134,7 +140,8 @@ export const actions: Record<string, () => void> = {
 		const c = currentConv();
 		if (c?.running) void convActions.interrupt(c);
 	},
-	"split-right": () => split("right"),
+	// In the terminal panel, ⌘\ splits the terminal (as in VS Code).
+	"split-right": () => (inTermPanel() ? termPanel.split() : split("right")),
 	"split-down": () => split("bottom"),
 	"next-tab": () => cycleTab(1),
 	"prev-tab": () => cycleTab(-1),
@@ -145,7 +152,8 @@ const k = isMac ? { mod: "⌘", shift: "⇧", alt: "⌥", ctrl: "⌃" } : { mod:
 /** Every action with its label and shortcut, for the command palette. */
 export const commandList: { id: string; label: string; group: string; keys?: string; words?: string }[] = [
 	{ id: "new-conversation", label: "New conversation", group: "Conversation", keys: `${k.mod}N` },
-	{ id: "new-terminal", label: "New terminal", group: "Conversation", keys: `${k.mod}T` },
+	{ id: "new-terminal", label: "New terminal", group: "Conversation", keys: `${k.mod}T`, words: "shell panel" },
+	{ id: "new-terminal-tab", label: "New terminal in a tab", group: "Conversation", words: "shell" },
 	{ id: "open-folder", label: "Open folder…", group: "Conversation", keys: `${k.mod}O` },
 	{ id: "find", label: "Find in conversation", group: "Conversation", keys: `${k.mod}F`, words: "search" },
 	{ id: "search", label: "Search history", group: "Conversation", keys: `${k.mod}K` },
@@ -166,7 +174,8 @@ export const commandList: { id: string; label: string; group: string; keys?: str
 	{ id: "prev-tab", label: "Previous tab", group: "View", keys: `${k.shift}${k.ctrl}Tab` },
 	{ id: "toggle-sidebar", label: "Toggle sidebar", group: "View", keys: `${k.mod}B` },
 	{ id: "toggle-progress", label: "Toggle progress panel", group: "View", keys: `${k.alt}${k.mod}P` },
-	{ id: "toggle-terminal", label: "Toggle terminal", group: "View", keys: `${k.ctrl}\`` },
+	{ id: "toggle-terminal", label: "Toggle terminal panel", group: "View", keys: `${k.ctrl}\``, words: "shell bottom" },
+	{ id: "maximize-terminal", label: "Maximize terminal panel", group: "View", words: "shell bottom full" },
 	{ id: "zoom-in", label: "Zoom in", group: "View", keys: `${k.mod}+` },
 	{ id: "zoom-out", label: "Zoom out", group: "View", keys: `${k.mod}−` },
 	{ id: "zoom-reset", label: "Actual size", group: "View", keys: `${k.mod}0` },
@@ -188,7 +197,7 @@ export function run(id: string) {
 }
 
 /** Shortcuts the macOS menu owns; the page handles them elsewhere. */
-const menuOwned = isMac && inTauri;
+export const menuOwned = isMac && inTauri;
 
 /** Keyboard shortcuts. Returns true when handled. */
 export function onKey(e: KeyboardEvent): boolean {

@@ -10,6 +10,8 @@ export interface TermSpec {
 	run?: { provider: "claude" | "codex"; account: string; resume?: string; login?: boolean };
 	/** Typed into the shell once it starts (project actions, worktree setup). */
 	command?: string;
+	/** Saved proxy id (Settings → Network). */
+	proxy?: string | null;
 }
 
 export interface Tab {

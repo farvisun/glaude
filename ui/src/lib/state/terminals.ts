@@ -11,6 +11,7 @@ import { call, channel, inTauri } from "$lib/ipc";
 import { openLink, showError } from "./sessions";
 import type { TermSpec } from "./layout.svelte";
 import { prefs } from "./prefs.svelte";
+import { proxies } from "./proxies.svelte";
 
 interface Entry {
 	term: Terminal;
@@ -26,6 +27,12 @@ interface Entry {
 }
 
 const entries = new Map<string, Entry>();
+
+/** Told when a shell sets its title (for terminal names in the panel). */
+let titleHandler: ((id: string, title: string) => void) | null = null;
+export function onTitle(fn: (id: string, title: string) => void) {
+	titleHandler = fn;
+}
 
 const ANSI_DARK = {
 	black: "#1b2233",
@@ -125,6 +132,7 @@ function create(tabId: string, spec: TermSpec): Entry {
 	term.loadAddon(new Unicode11Addon());
 	term.unicode.activeVersion = "11";
 	term.loadAddon(new WebLinksAddon((_e, uri) => openLink(uri)));
+	term.onTitleChange((title) => titleHandler?.(tabId, title));
 	const entry: Entry = { term, fit, el, spec, ptyId: null, generation: 0, exited: false, cols: 80, rows: 24 };
 	term.onData((data) => {
 		if (entry.exited) {
@@ -143,6 +151,18 @@ async function start(tabId: string, entry: Entry) {
 	const id = `${tabId}:${entry.generation}`;
 	entry.ptyId = id;
 	entry.exited = false;
+	await proxies.ready();
+	// Undefined: the defaults (an agent's account and project, or the shell
+	// default); "none" or null: no proxy.
+	const s = entry.spec;
+	const proxy =
+		s.proxy !== undefined
+			? s.proxy && s.proxy !== "none"
+				? s.proxy
+				: null
+			: s.run
+				? proxies.defaultFor({ provider: s.run.provider, account: s.run.account, cwd: s.cwd }).id
+				: proxies.forShell(s.cwd);
 	const onData = await channel<ArrayBuffer | number[] | Uint8Array>((chunk) => {
 		if (entry.ptyId !== id) return;
 		entry.term.write(chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk as ArrayBuffer));
@@ -162,6 +182,7 @@ async function start(tabId: string, entry: Entry) {
 				rows: entry.rows,
 				run: entry.spec.run ?? null,
 				shell: prefs.termShell.trim() || null,
+				proxy,
 			},
 			onData: onData.raw,
 			onExit: onExit.raw,

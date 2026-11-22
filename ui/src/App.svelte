@@ -14,12 +14,17 @@
 	import RewindDialog from "$lib/components/conv/RewindDialog.svelte";
 	import SessionPanel from "$lib/components/conv/SessionPanel.svelte";
 	import PathMenu from "$lib/components/PathMenu.svelte";
+	import ProxyEditor from "$lib/components/ProxyEditor.svelte";
+	import SessionRename from "$lib/components/SessionRename.svelte";
+	import TerminalPanel from "$lib/components/TerminalPanel.svelte";
+	import { termPanel } from "$lib/state/termpanel.svelte";
+	import { proxies } from "$lib/state/proxies.svelte";
 	import { convActions, hostLost, restoreConversations, startIdleReaper } from "$lib/state/sessions";
 	import { startAlerts } from "$lib/state/alerts";
 	import { call, inTauri } from "$lib/ipc";
 	import { dispose as disposeTerminal, retheme, reconfigure as reconfigureTerminals } from "$lib/state/terminals";
 	import { layout } from "$lib/state/layout.svelte";
-	import { onKey as runShortcut, startCommands } from "$lib/state/commands.svelte";
+	import { onKey as runShortcut, startCommands, currentConv, menuOwned } from "$lib/state/commands.svelte";
 	import { ui } from "$lib/state/ui.svelte";
 	import { prefs, isMac, widths } from "$lib/state/prefs.svelte";
 	import type { Pane } from "paneforge";
@@ -28,17 +33,14 @@
 
 	startIdleReaper();
 	startAlerts();
-	void restoreConversations();
+	void restoreConversations().then(() => termPanel.restore());
 	if (inTauri)
 		import("@tauri-apps/api/event").then(({ listen }) => {
 			void listen("host-lost", () => hostLost());
 		});
 
 	layout.onClose = (tab) => {
-		if (tab.kind === "conversation" && tab.ref) {
-			convActions.close(tab.ref);
-			disposeTerminal(`drawer:${tab.ref}`);
-		}
+		if (tab.kind === "conversation" && tab.ref) convActions.close(tab.ref);
 		if (tab.kind === "terminal") disposeTerminal(tab.id);
 	};
 
@@ -107,6 +109,52 @@
 	};
 	startCommands();
 
+	// New terminals in the panel start in the focused conversation's folder,
+	// going out the way that conversation does.
+	termPanel.defaults = () => {
+		const c = currentConv();
+		if (!c) return {};
+		return { cwd: c.cwd, proxy: proxies.s.terminals ? (c.proxyActive ?? "none") : "none" };
+	};
+
+	// Ctrl+` toggles the terminal panel, Ctrl+Shift+` adds a terminal, also
+	// while a terminal has focus (capture phase, before xterm sees it).
+	function onKeyCapture(e: KeyboardEvent) {
+		if (!e.ctrlKey || e.metaKey || e.altKey || (e.key !== "`" && e.key !== "~" && e.code !== "Backquote")) return;
+		if (!e.shiftKey && menuOwned) return; // the app menu has Ctrl+`
+		e.preventDefault();
+		e.stopPropagation();
+		if (e.shiftKey) termPanel.newTerminal();
+		else termPanel.toggle();
+	}
+
+	// The terminal panel's height, dragged or with the arrow keys.
+	let mainEl = $state<HTMLElement>();
+	function dragPanel(e: PointerEvent) {
+		if (!mainEl) return;
+		const el = e.currentTarget as HTMLElement;
+		el.setPointerCapture(e.pointerId);
+		const box = mainEl.getBoundingClientRect();
+		const move = (ev: PointerEvent) => {
+			termPanel.size = Math.min(85, Math.max(12, ((box.bottom - ev.clientY) / box.height) * 100));
+		};
+		const up = () => {
+			el.removeEventListener("pointermove", move);
+			el.removeEventListener("pointerup", up);
+			termPanel.save();
+		};
+		el.addEventListener("pointermove", move);
+		el.addEventListener("pointerup", up);
+	}
+	function panelKey(e: KeyboardEvent) {
+		const step = e.shiftKey ? 10 : 3;
+		if (e.key === "ArrowUp") termPanel.size = Math.min(85, termPanel.size + step);
+		else if (e.key === "ArrowDown") termPanel.size = Math.max(12, termPanel.size - step);
+		else return;
+		e.preventDefault();
+		termPanel.save();
+	}
+
 	function onKey(e: KeyboardEvent) {
 		// Off macOS the shortcuts use Ctrl, which belongs to the shell
 		// (Ctrl+B, Ctrl+W) while a terminal has focus.
@@ -115,7 +163,7 @@
 	}
 </script>
 
-<svelte:window onkeydown={onKey} bind:innerWidth={winWidth} />
+<svelte:window onkeydown={onKey} onkeydowncapture={onKeyCapture} bind:innerWidth={winWidth} />
 
 <ModeWatcher defaultMode="dark" />
 <Toaster position="bottom-right" richColors closeButton />
@@ -128,6 +176,8 @@
 <RewindDialog />
 <SessionPanel />
 <PathMenu />
+<ProxyEditor />
+<SessionRename />
 
 <Tooltip.Provider delayDuration={400}>
 	<div class="h-full w-full">
@@ -158,8 +208,34 @@
 			</Resizable.Pane>
 			<Resizable.Handle />
 			<Resizable.Pane defaultSize={100 - (layout.sidebar.collapsed ? 0 : layout.sidebar.size)}>
-				<main class="bg-background h-full min-w-0">
-					<PaneView node={layout.root} sidebarCollapsed={layout.sidebar.collapsed} onExpandSidebar={() => sidebarPane?.expand()} />
+				<main class="bg-background flex h-full min-w-0 flex-col" bind:this={mainEl}>
+					<div class="min-h-0 flex-1 {termPanel.open && termPanel.maximized ? 'hidden' : ''}">
+						<PaneView node={layout.root} sidebarCollapsed={layout.sidebar.collapsed} onExpandSidebar={() => sidebarPane?.expand()} />
+					</div>
+					{#if termPanel.open}
+						{#if !termPanel.maximized}
+							<div class="relative z-20 h-0 shrink-0">
+								<!-- A focusable window splitter (ARIA separator), moved with the arrow keys. -->
+								<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
+								<div
+									class="hover:bg-primary/50 focus-visible:bg-primary/60 absolute inset-x-0 -top-[3px] h-[6px] cursor-row-resize transition-colors outline-none"
+									role="separator"
+									aria-orientation="horizontal"
+									aria-label="Resize terminal panel"
+									aria-valuenow={Math.round(termPanel.size)}
+									aria-valuemin={12}
+									aria-valuemax={85}
+									tabindex="0"
+									onpointerdown={dragPanel}
+									onkeydown={panelKey}
+									ondblclick={() => termPanel.toggleMaximize()}
+								></div>
+							</div>
+						{/if}
+						<div class="min-h-0 {termPanel.maximized ? 'flex-1' : 'shrink-0'}" style:height={termPanel.maximized ? undefined : `${termPanel.size}%`}>
+							<TerminalPanel />
+						</div>
+					{/if}
 				</main>
 			</Resizable.Pane>
 		</Resizable.PaneGroup>

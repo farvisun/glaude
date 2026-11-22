@@ -161,9 +161,10 @@ pub fn app_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         )?)
         .item(&item(
             "toggle-terminal",
-            "Toggle Terminal",
+            "Toggle Terminal Panel",
             Some("Ctrl+Backquote"),
         )?)
+        .item(&item("maximize-terminal", "Maximize Terminal Panel", None)?)
         .separator()
         .item(&item("zoom-in", "Zoom In", Some("CmdOrCtrl+="))?)
         .item(&item("zoom-out", "Zoom Out", Some("CmdOrCtrl+-"))?)

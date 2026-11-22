@@ -15,7 +15,6 @@
 	import Spark from "./Spark.svelte";
 	import QueuePanel from "./QueuePanel.svelte";
 	import LimitBanner from "./LimitBanner.svelte";
-	import TerminalDrawer from "./TerminalDrawer.svelte";
 	import { Button } from "$lib/components/ui/button";
 	import MessagesSquare from "@lucide/svelte/icons/messages-square";
 	import Quote from "@lucide/svelte/icons/quote";
@@ -187,15 +186,6 @@
 			clearTimeout(t);
 		};
 	});
-
-	// Ctrl+` shows or hides the terminal drawer (also from inside it).
-	function onWindowKey(e: KeyboardEvent) {
-		if (!active || !conv || !e.ctrlKey || e.metaKey || e.altKey || (e.key !== "`" && e.code !== "Backquote")) return;
-		e.preventDefault();
-		e.stopPropagation();
-		conv.drawer = !conv.drawer;
-		if (!conv.drawer) tick().then(() => composer?.focus());
-	}
 
 	// Seen: clear the "finished while away" dot.
 	$effect(() => {
@@ -459,7 +449,6 @@
 	});
 </script>
 
-<svelte:window onkeydowncapture={onWindowKey} />
 
 {#if conv}
 	<div class="@container flex h-full min-h-0">
@@ -643,9 +632,6 @@
 					{modeHint}
 				/>
 			</div>
-			{#if conv.drawer}
-				<TerminalDrawer id="drawer:{conv.id}" cwd={conv.cwd} onClose={() => (conv.drawer = false)} />
-			{/if}
 			<StatusLine
 				{conv}
 				{modes}
