@@ -13,7 +13,10 @@ app="$PWD/target/release/bundle/macos/Glaude.app"
 dest=/Applications/Glaude.app
 lsregister=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
 
-if pgrep -f "^$dest/Contents/MacOS/glaude" >/dev/null; then
+# The window must be closed. The background agent host (`glaude --host`)
+# may keep running: it keeps its binary open and hands over to the new
+# version once its agents are idle.
+if pgrep -f "^$dest/Contents/MacOS/glaude\$" >/dev/null; then
   echo "Glaude is running. Quit it first, then run this again." >&2
   exit 1
 fi
