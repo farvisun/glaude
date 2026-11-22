@@ -691,6 +691,16 @@ impl Pool {
         Ok(s)
     }
 
+    /// The running app-server for `home`, if Glaude already started one.
+    pub async fn existing(&self, home: &Path) -> Option<Arc<CodexServer>> {
+        self.servers
+            .lock()
+            .await
+            .get(home)
+            .filter(|s| s.is_alive())
+            .cloned()
+    }
+
     pub async fn shutdown_all(&self) {
         for (_, s) in self.servers.lock().await.drain() {
             s.shutdown();
