@@ -12,12 +12,12 @@
 	import SessionPanel from "$lib/components/conv/SessionPanel.svelte";
 	import PathMenu from "$lib/components/PathMenu.svelte";
 	import { convActions, hostLost, restoreConversations, startIdleReaper } from "$lib/state/sessions";
-	import { inTauri } from "$lib/ipc";
-	import { dispose as disposeTerminal, retheme } from "$lib/state/terminals";
+	import { call, inTauri } from "$lib/ipc";
+	import { dispose as disposeTerminal, retheme, reconfigure as reconfigureTerminals } from "$lib/state/terminals";
 	import { layout } from "$lib/state/layout.svelte";
-	import { conversations } from "$lib/state/conversations.svelte";
+	import { onKey as runShortcut, startCommands } from "$lib/state/commands.svelte";
 	import { ui } from "$lib/state/ui.svelte";
-	import { prefs, isMac } from "$lib/state/prefs.svelte";
+	import { prefs, isMac, widths } from "$lib/state/prefs.svelte";
 	import type { Pane } from "paneforge";
 
 	let sidebarPane = $state<Pane>();
@@ -48,6 +48,35 @@
 		document.documentElement.dataset.palette = prefs.palette;
 	});
 
+	// Settings → Appearance, applied live.
+	$effect(() => {
+		const root = document.documentElement;
+		root.dataset.density = prefs.density;
+		root.style.setProperty("--code-font", prefs.fontStack(prefs.codeFont, prefs.codeFontCustom));
+		root.style.setProperty("--msg-w", widths[prefs.messageWidth]);
+	});
+	$effect(() => {
+		const z = prefs.uiScale;
+		if (inTauri)
+			import("@tauri-apps/api/webview").then(({ getCurrentWebview }) =>
+				getCurrentWebview()
+					.setZoom(z)
+					.catch(() => {}),
+			);
+		else (document.documentElement.style as CSSStyleDeclaration & { zoom: string }).zoom = String(z);
+	});
+	// The background host reads these (quit behaviour, notifications while closed).
+	$effect(() => {
+		const keepAgents = prefs.keepAgents;
+		const notifyClosed = prefs.notifyClosed;
+		call("app_prefs_set", { keepAgents, notifyClosed }).catch(() => {});
+	});
+	// Terminal font, size and cursor.
+	$effect(() => {
+		void [prefs.termFont, prefs.termFontCustom, prefs.termFontSize, prefs.termCursor, prefs.termCursorBlink];
+		requestAnimationFrame(reconfigureTerminals);
+	});
+
 	$effect(() => {
 		document.documentElement.classList.toggle("platform-mac", isMac);
 	});
@@ -67,32 +96,17 @@
 		}
 	});
 
+	ui.toggleSidebar = () => {
+		if (layout.sidebar.collapsed) sidebarPane?.expand();
+		else sidebarPane?.collapse();
+	};
+	startCommands();
+
 	function onKey(e: KeyboardEvent) {
 		// Off macOS the shortcuts use Ctrl, which belongs to the shell
 		// (Ctrl+B, Ctrl+W) while a terminal has focus.
 		if (!isMac && (e.target as HTMLElement | null)?.closest?.(".xterm")) return;
-		const mod = isMac ? e.metaKey : e.ctrlKey;
-		if (mod && e.key.toLowerCase() === "b") {
-			e.preventDefault();
-			if (layout.sidebar.collapsed) sidebarPane?.expand();
-			else sidebarPane?.collapse();
-		}
-		if (mod && e.key.toLowerCase() === "k") {
-			e.preventDefault();
-			ui.searchOpen = !ui.searchOpen;
-		}
-		if (mod && e.shiftKey && e.key.toLowerCase() === "g") {
-			e.preventDefault();
-			const tab = layout.focusedLeaf.active ? layout.tabs[layout.focusedLeaf.active] : undefined;
-			const conv = tab?.kind === "conversation" && tab.ref ? conversations.get(tab.ref) : undefined;
-			if (conv) ui.openChanges(conv.cwd);
-			return;
-		}
-		if (mod && e.key.toLowerCase() === "w") {
-			e.preventDefault();
-			const active = layout.focusedLeaf.active;
-			if (active) layout.closeTab(active);
-		}
+		if (runShortcut(e)) e.preventDefault();
 	}
 </script>
 

@@ -11,6 +11,7 @@
 	import { permissionModes, startConversation, showError } from "$lib/state/sessions";
 	import { call } from "$lib/ipc";
 	import type { AgentInfo, Provider } from "$lib/types";
+	import { claudeModels, efforts, loadNewConv, saveNewConv, type NewConvDefaults } from "$lib/state/newconv";
 
 	interface AccountOption {
 		provider: Provider;
@@ -20,38 +21,15 @@
 		archived: boolean;
 	}
 
-	const LAST_KEY = "glaude.newconv.v1";
-	interface Last {
-		provider: Provider;
-		cwd: string;
-		account: Record<Provider, string>;
-		mode: Record<Provider, string>;
-		model: Record<Provider, string>;
-		recent: string[];
-	}
-
-	function loadLast(): Last {
-		const fallback: Last = {
-			provider: "claude",
-			cwd: "",
-			account: { claude: "default", codex: "default" },
-			mode: { claude: "default", codex: "full" },
-			model: { claude: "", codex: "" },
-			recent: [],
-		};
-		try {
-			return { ...fallback, ...(JSON.parse(localStorage.getItem(LAST_KEY) ?? "null") ?? {}) };
-		} catch {
-			return fallback;
-		}
-	}
-
-	const last = loadLast();
-	let provider = $state<Provider>(last.provider);
-	let cwd = $state(last.cwd);
-	let account = $state(last.account[last.provider]);
-	let mode = $state(last.mode[last.provider]);
-	let model = $state(last.model[last.provider]);
+	type Last = NewConvDefaults;
+	const initial = loadNewConv();
+	let last = $state(initial);
+	let provider = $state<Provider>(initial.provider);
+	let cwd = $state(initial.cwd);
+	let account = $state(initial.account[initial.provider]);
+	let mode = $state(initial.mode[initial.provider]);
+	let model = $state(initial.model[initial.provider]);
+	let effort = $state(initial.effort[initial.provider]);
 	let accounts = $state<AccountOption[]>([]);
 	let starting = $state(false);
 	/** Claude: run the session as this agent ("" = the default). */
@@ -88,13 +66,6 @@
 		return () => clearTimeout(t);
 	});
 
-	const claudeModels = [
-		{ value: "", label: "Default" },
-		{ value: "opus", label: "Opus" },
-		{ value: "sonnet", label: "Sonnet" },
-		{ value: "haiku", label: "Haiku" },
-		{ value: "fable", label: "Fable" },
-	];
 	let codexModels = $state<{ value: string; label: string }[]>([]);
 	const models = $derived(provider === "claude" ? claudeModels : [{ value: "", label: "Default" }, ...codexModels]);
 
@@ -111,6 +82,10 @@
 
 	$effect(() => {
 		if (!ui.newConversationOpen) return;
+		untrack(() => {
+			last = loadNewConv();
+			switchProvider(last.provider);
+		});
 		if (ui.newConversationCwd) cwd = ui.newConversationCwd;
 		const preset = ui.newConversationPreset;
 		if (preset)
@@ -129,6 +104,7 @@
 		account = last.account[p] ?? "default";
 		mode = last.mode[p] ?? modes[0].value;
 		model = last.model[p] ?? "";
+		effort = last.effort[p] ?? "";
 	}
 
 	async function pickFolder() {
@@ -143,16 +119,22 @@
 	async function start() {
 		if (!cwd.trim()) return;
 		starting = true;
-		const next: Last = {
-			...last,
-			provider,
-			cwd,
-			account: { ...last.account, [provider]: account },
-			mode: { ...last.mode, [provider]: mode },
-			model: { ...last.model, [provider]: model },
-			recent: [cwd, ...last.recent.filter((r) => r !== cwd)].slice(0, 8),
-		};
-		localStorage.setItem(LAST_KEY, JSON.stringify(next));
+		const recent = [cwd, ...last.recent.filter((r) => r !== cwd)].slice(0, 8);
+		// Settings → New conversations decides whether choices become the defaults.
+		const next: Last = last.remember
+			? {
+					...last,
+					provider,
+					cwd,
+					account: { ...last.account, [provider]: account },
+					mode: { ...last.mode, [provider]: mode },
+					model: { ...last.model, [provider]: model },
+					effort: { ...last.effort, [provider]: effort },
+					recent,
+				}
+			: { ...last, cwd, recent };
+		saveNewConv(next);
+		last = next;
 		let dir = cwd.trim();
 		let title: string | undefined;
 		if (inWorktree && isRepo) {
@@ -177,6 +159,7 @@
 			title,
 			cwd: dir,
 			model: model || undefined,
+			effort: effort || undefined,
 			permissionMode: mode,
 			agent: provider === "claude" && agent ? agent : undefined,
 		});
@@ -277,16 +260,29 @@
 				</div>
 			{/if}
 
-			<div class="flex flex-col gap-1.5">
-				<Label>Permissions</Label>
-				<Select.Root type="single" bind:value={mode}>
-					<Select.Trigger class="w-full">{modes.find((m) => m.value === mode)?.label ?? mode}</Select.Trigger>
-					<Select.Content>
-						{#each modes as m (m.value)}
-							<Select.Item value={m.value} label={m.label}>{m.label}</Select.Item>
-						{/each}
-					</Select.Content>
-				</Select.Root>
+			<div class="grid grid-cols-2 gap-3">
+				<div class="flex flex-col gap-1.5">
+					<Label>Effort</Label>
+					<Select.Root type="single" bind:value={effort}>
+						<Select.Trigger class="w-full">{efforts[provider].find((x) => x.value === effort)?.label ?? effort}</Select.Trigger>
+						<Select.Content>
+							{#each efforts[provider] as x (x.value)}
+								<Select.Item value={x.value} label={x.label}>{x.label}</Select.Item>
+							{/each}
+						</Select.Content>
+					</Select.Root>
+				</div>
+				<div class="flex flex-col gap-1.5">
+					<Label>Permissions</Label>
+					<Select.Root type="single" bind:value={mode}>
+						<Select.Trigger class="w-full">{modes.find((m) => m.value === mode)?.label ?? mode}</Select.Trigger>
+						<Select.Content>
+							{#each modes as m (m.value)}
+								<Select.Item value={m.value} label={m.label}>{m.label}</Select.Item>
+							{/each}
+						</Select.Content>
+					</Select.Root>
+				</div>
 			</div>
 
 			{#if isRepo}

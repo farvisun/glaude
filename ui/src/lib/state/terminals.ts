@@ -10,6 +10,7 @@ import { WebLinksAddon } from "@xterm/addon-web-links";
 import { call, channel, inTauri } from "$lib/ipc";
 import { openLink, showError } from "./sessions";
 import type { TermSpec } from "./layout.svelte";
+import { prefs } from "./prefs.svelte";
 
 interface Entry {
 	term: Terminal;
@@ -83,6 +84,25 @@ function theme(): ITheme {
 	};
 }
 
+/** Font and cursor from Settings → Terminal. */
+function termOptions() {
+	return {
+		fontFamily: `${prefs.fontStack(prefs.termFont, prefs.termFontCustom)}, "Estedad Variable"`,
+		fontSize: prefs.termFontSize,
+		cursorStyle: prefs.termCursor,
+		cursorBlink: prefs.termCursorBlink,
+	};
+}
+
+/** Apply changed terminal settings to every open terminal. */
+export function reconfigure() {
+	const o = termOptions();
+	for (const [id, e] of entries) {
+		Object.assign(e.term.options, o);
+		refit(id);
+	}
+}
+
 /** Re-theme every terminal (light/dark or palette change). */
 export function retheme() {
 	const t = theme();
@@ -94,10 +114,8 @@ function create(tabId: string, spec: TermSpec): Entry {
 	el.className = "h-full w-full";
 	const term = new Terminal({
 		allowProposedApi: true,
-		fontFamily: 'ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", "Estedad Variable", monospace',
-		fontSize: 13,
+		...termOptions(),
 		lineHeight: 1.15,
-		cursorBlink: true,
 		scrollback: 10000,
 		macOptionIsMeta: true,
 		theme: theme(),
@@ -138,7 +156,13 @@ async function start(tabId: string, entry: Entry) {
 	try {
 		await call("pty_open", {
 			id,
-			spec: { cwd: entry.spec.cwd ?? null, cols: entry.cols, rows: entry.rows, run: entry.spec.run ?? null },
+			spec: {
+				cwd: entry.spec.cwd ?? null,
+				cols: entry.cols,
+				rows: entry.rows,
+				run: entry.spec.run ?? null,
+				shell: prefs.termShell.trim() || null,
+			},
 			onData: onData.raw,
 			onExit: onExit.raw,
 		});

@@ -6,9 +6,10 @@ import { Conversation, conversations } from "./conversations.svelte";
 import { layout, uid } from "./layout.svelte";
 import { basename } from "$lib/format";
 import { history } from "./history.svelte";
-import { notifyPermission, notifyTurnDone, updateBadge } from "./notify";
+import { notifyPermission, notifyTurnDone, updateBadge, visible } from "./notify";
 import { ui } from "./ui.svelte";
 import { triage } from "./triage.svelte";
+import { prefs } from "./prefs.svelte";
 
 export interface StartSpec {
 	provider: Provider;
@@ -175,6 +176,7 @@ function onBatch(conv: Conversation, batch: ConvEvent[]) {
 			// A usage limit shows as a banner with "Resume at reset" instead.
 			if (ev.error && !/usage limit|limit reached|rate limit/i.test(ev.error)) showError("The turn ended with an error", ev.error);
 			history.refreshSoon();
+			if (!visible(conv)) conv.markUnread(true);
 			notifyTurnDone(conv, ev.error);
 		} else if (ev.type === "item" && ev.item.kind === "permission" && ev.item.status === "pending") {
 			notifyPermission(conv, ev.item.tool === "ExitPlanMode" ? "plan" : ev.item.tool);
@@ -216,10 +218,9 @@ export async function startConversation(spec: StartSpec, paneId?: string): Promi
 	return (await connect(conv, spec)) ? conv : null;
 }
 
-const IDLE_MS = 15 * 60_000;
 let reaper: ReturnType<typeof setInterval> | null = null;
 
-/** Stop agent processes idle for 15 minutes; the next message resumes the
+/** Stop agent processes idle for a while (Settings → Background); the next message resumes the
  *  same session (ensureAlive). Keeps memory flat with many open tabs. */
 export function startIdleReaper() {
 	if (reaper) return;
@@ -227,7 +228,8 @@ export function startIdleReaper() {
 		const now = Date.now();
 		for (const conv of Object.values(conversations.byId)) {
 			if (!conv.alive || conv.running || conv.pendingPermissions > 0 || conv.runningTasks.length > 0) continue;
-			if (now - conv.lastActivity < IDLE_MS) continue;
+			// Settings → Background: minutes before an idle agent stops (0 = never).
+			if (prefs.idleMinutes <= 0 || now - conv.lastActivity < prefs.idleMinutes * 60_000) continue;
 			conv.alive = false;
 			call("conv_close", { convId: conv.id }).catch(() => {});
 		}

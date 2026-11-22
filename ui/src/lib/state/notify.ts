@@ -4,6 +4,7 @@ import { inTauri } from "$lib/ipc";
 import type { Conversation } from "./conversations.svelte";
 import { conversations } from "./conversations.svelte";
 import { layout } from "./layout.svelte";
+import { prefs, isMac } from "./prefs.svelte";
 
 let permissionGranted: boolean | null = null;
 
@@ -16,7 +17,7 @@ async function canNotify(): Promise<boolean> {
 	return permissionGranted;
 }
 
-function visible(conv: Conversation): boolean {
+export function visible(conv: Conversation): boolean {
 	if (!document.hasFocus()) return false;
 	return layout.leaves().some((l) => l.active && layout.tabs[l.active]?.ref === conv.id);
 }
@@ -24,7 +25,7 @@ function visible(conv: Conversation): boolean {
 async function send(title: string, body: string) {
 	if (!(await canNotify())) return;
 	const n = await import("@tauri-apps/plugin-notification");
-	n.sendNotification({ title, body });
+	n.sendNotification({ title, body, ...(prefs.notifySound ? { sound: isMac ? "Glass" : "Default" } : {}) });
 }
 
 function label(conv: Conversation) {
@@ -33,13 +34,13 @@ function label(conv: Conversation) {
 
 export function notifyTurnDone(conv: Conversation, error?: string) {
 	updateBadge();
-	if (visible(conv)) return;
+	if (visible(conv) || !(error ? prefs.notifyErrors : prefs.notifyDone)) return;
 	void send(label(conv), error ? `Stopped with an error: ${error.slice(0, 120)}` : "Finished. Your turn.");
 }
 
 export function notifyPermission(conv: Conversation, tool: string) {
 	updateBadge();
-	if (visible(conv)) return;
+	if (visible(conv) || !prefs.notifyWaiting) return;
 	const body =
 		tool === "question" ? "Has a question for you." : tool === "plan" ? "Finished a plan for you to review." : `Needs your approval to use ${tool}.`;
 	void send(label(conv), body);

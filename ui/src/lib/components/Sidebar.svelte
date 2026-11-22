@@ -30,7 +30,7 @@
 </script>
 
 <aside class="bg-sidebar text-sidebar-foreground flex h-full flex-col whitespace-nowrap">
-	<div class="flex h-11 shrink-0 items-center gap-1 px-2 {isMac ? 'ps-[78px]' : ''}" data-tauri-drag-region>
+	<div class="flex h-(--tab-h) shrink-0 items-center gap-1 px-2 {isMac ? 'ps-[78px]' : ''}" data-tauri-drag-region>
 		<span class="text-sm font-semibold tracking-tight" data-tauri-drag-region>Glaude</span>
 		<div class="ms-auto flex items-center">
 			<Tooltip.Root>
