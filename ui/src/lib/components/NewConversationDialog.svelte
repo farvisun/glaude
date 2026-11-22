@@ -9,6 +9,9 @@
 	import FolderOpen from "@lucide/svelte/icons/folder-open";
 	import { ui } from "$lib/state/ui.svelte";
 	import { permissionModes, startConversation, showError } from "$lib/state/sessions";
+	import { proxies, isSocks } from "$lib/state/proxies.svelte";
+	import ProxyPicker from "./ProxyPicker.svelte";
+	import TriangleAlert from "@lucide/svelte/icons/triangle-alert";
 	import { call } from "$lib/ipc";
 	import type { AgentInfo, Provider } from "$lib/types";
 	import { claudeModels, efforts, loadNewConv, saveNewConv, type NewConvDefaults } from "$lib/state/newconv";
@@ -32,6 +35,12 @@
 	let effort = $state(initial.effort[initial.provider]);
 	let accounts = $state<AccountOption[]>([]);
 	let starting = $state(false);
+	/** Proxy for this conversation: an id, "none", or undefined for the defaults. */
+	let proxy = $state<string | undefined>();
+	$effect(() => {
+		if (ui.newConversationOpen) void proxies.ready();
+	});
+	const net = $derived(proxies.resolve({ provider, account, cwd }, proxy));
 	/** Claude: run the session as this agent ("" = the default). */
 	let agent = $state("");
 	// Work in a new git worktree (own branch and folder).
@@ -162,7 +171,9 @@
 			effort: effort || undefined,
 			permissionMode: mode,
 			agent: provider === "claude" && agent ? agent : undefined,
+			proxy,
 		});
+		proxy = undefined;
 		starting = false;
 	}
 </script>
@@ -284,6 +295,18 @@
 					</Select.Root>
 				</div>
 			</div>
+
+			{#if proxies.list.length}
+				<div class="flex flex-col gap-1.5">
+					<Label>Proxy</Label>
+					<ProxyPicker value={proxy} onChange={(v) => (proxy = v)} target={{ provider, account, cwd }} />
+					{#if provider === "claude" && net.proxy && isSocks(net.proxy.url)}
+						<p class="text-attention flex items-start gap-1.5 text-[12px]">
+							<TriangleAlert class="mt-0.5 size-3.5 shrink-0" />{net.proxy.name} is a SOCKS proxy. Claude Code only works with HTTP proxies.
+						</p>
+					{/if}
+				</div>
+			{/if}
 
 			{#if isRepo}
 				<div class="flex flex-col gap-2">

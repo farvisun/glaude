@@ -5,6 +5,7 @@ mod files;
 mod git;
 pub mod host;
 mod menu;
+mod proxy;
 mod pty;
 mod search;
 mod sink;
@@ -129,6 +130,9 @@ pub fn run() {
             files::editors_available,
             files::read_text_file,
             menu::app_prefs_set,
+            proxy::proxies_get,
+            proxy::proxies_set,
+            proxy::proxy_check,
             menu::tray_update,
             conv::conv_start,
             conv::conv_attach,

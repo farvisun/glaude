@@ -51,6 +51,9 @@ pub struct PtySpec {
     /// Settings → Terminal: a shell instead of the login shell.
     #[serde(default)]
     pub shell: Option<String>,
+    /// Saved proxy id (Settings → Network).
+    #[serde(default)]
+    pub proxy: Option<String>,
 }
 
 fn shell() -> (PathBuf, Vec<String>) {
@@ -144,6 +147,9 @@ fn command(spec: &PtySpec) -> Result<CommandBuilder, String> {
         }
         Some(run) => return Err(format!("Unknown tool {}", run.provider)),
     };
+    if let Some(p) = crate::proxy::resolve(spec.proxy.as_deref()) {
+        overrides.extend(p.vars());
+    }
     let mut cmd = CommandBuilder::new(program);
     cmd.args(args);
     cmd.env_clear();
@@ -285,6 +291,7 @@ mod tests {
             rows: 30,
             run: None,
             shell: None,
+            proxy: None,
         };
         let pair = native_pty_system()
             .openpty(PtySize {

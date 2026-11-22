@@ -76,8 +76,10 @@ export class Conversation {
 	limitedUntil = $state<string | null>(null);
 	/** A "continue" is scheduled at this time. */
 	resumeAt = $state<string | null>(null);
-	/** The terminal drawer under the conversation is shown. */
-	drawer = $state(false);
+	/** Proxy choice: a saved proxy id, "none", or undefined for the defaults. */
+	proxy = $state<string | undefined>();
+	/** The proxy the running process was started with (null: none). */
+	proxyActive = $state<string | null>(null);
 	/** Side chat: the conversation it was forked from. */
 	sideOf = $state<string | null>(null);
 	/** Cross-review: the conversation whose changes this one reviews. */

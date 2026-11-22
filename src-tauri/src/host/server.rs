@@ -56,6 +56,9 @@ pub struct StartSpec {
     pub resume_at: Option<String>,
     /// Claude: run the session as this agent.
     pub agent: Option<String>,
+    /// Saved proxy id (Settings → Network); none or "none": no proxy.
+    #[serde(default)]
+    pub proxy: Option<String>,
 }
 
 pub enum Agent {
@@ -526,6 +529,7 @@ impl Host {
         spec: &StartSpec,
     ) -> Result<Arc<Agent>, String> {
         let sink = conv.sink();
+        let proxy = crate::proxy::resolve(spec.proxy.as_deref());
         let agent = match spec.provider.as_str() {
             "claude" => Agent::Claude(
                 ClaudeSession::spawn(
@@ -540,6 +544,7 @@ impl Host {
                         resume_at: spec.resume_at.clone(),
                         agent: spec.agent.clone(),
                         load_history: !spec.skip_history,
+                        proxy: proxy.clone(),
                     },
                     sink,
                 )
@@ -549,7 +554,7 @@ impl Host {
             "codex" => {
                 let server = self
                     .pool
-                    .get(&paths::codex_home(&spec.account))
+                    .get(&paths::codex_home(&spec.account), proxy.as_ref())
                     .await
                     .map_err(|e| e.to_string())?;
                 Agent::Codex(

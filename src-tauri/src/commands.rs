@@ -167,7 +167,10 @@ pub async fn codex_sessions_list(
 ) -> Result<Vec<glaude_claude::transcript::SessionSummary>, String> {
     let server = pool
         .0
-        .get(&paths::codex_home("default"))
+        .get(
+            &paths::codex_home("default"),
+            crate::proxy::for_account("codex", "default").as_ref(),
+        )
         .await
         .map_err(err)?;
     let threads = server.list_threads(300).await.map_err(err)?;
@@ -190,8 +193,10 @@ pub async fn codex_models(
     pool: State<'_, crate::conv::CodexPool>,
     account: Option<String>,
 ) -> Result<Vec<glaude_core::model::ModelChoice>, String> {
-    let home = paths::codex_home(account.as_deref().unwrap_or("default"));
-    let server = pool.0.get(&home).await.map_err(err)?;
+    let account = account.as_deref().unwrap_or("default");
+    let home = paths::codex_home(account);
+    let proxy = crate::proxy::for_account("codex", account);
+    let server = pool.0.get(&home, proxy.as_ref()).await.map_err(err)?;
     server.models().await.map_err(err)
 }
 

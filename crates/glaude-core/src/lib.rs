@@ -10,4 +10,5 @@ pub mod git;
 pub mod lines;
 pub mod model;
 pub mod procs;
+pub mod proxy;
 pub mod render;

@@ -28,6 +28,10 @@ class UiState {
 	promptFill = $state<{ prompt: import("./prompts.svelte").SavedPrompt; convId: string } | null>(null);
 	/** Settings section to show next (from the menu). */
 	settingsSection = $state<string | null>(null);
+	/** Settings → Network: the proxy being added or edited. */
+	proxyEdit = $state<import("./proxies.svelte").Proxy | "new" | null>(null);
+	/** Sidebar: the past session being renamed. */
+	renameSession = $state<import("./history.svelte").SessionSummary | null>(null);
 	/** Set by the app shell: show or hide the sidebar. */
 	toggleSidebar: () => void = () => {};
 	/** Actions for a path clicked in a reply. */

@@ -14,6 +14,7 @@ use glaude_core::model::{
     Attachment, ConvEvent, Item, Limits, ModelChoice, SessionInfo, TurnState,
 };
 use glaude_core::procs;
+use glaude_core::proxy::ProxyEnv;
 use parking_lot::Mutex;
 use serde_json::{json, Value};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -43,16 +44,17 @@ pub struct CodexServer {
 }
 
 impl CodexServer {
-    pub async fn start(home: &Path) -> Result<Arc<Self>> {
+    pub async fn start(home: &Path, proxy: Option<&ProxyEnv>) -> Result<Arc<Self>> {
         let bin = env::codex_binary()
             .ok_or_else(|| anyhow!("Codex CLI not found. Install it or set CODEX_BIN."))?;
+        let mut overrides = vec![("CODEX_HOME", Some(home.display().to_string()))];
+        if let Some(p) = proxy {
+            overrides.extend(p.vars());
+        }
         let mut cmd = Command::new(&bin);
         cmd.arg("app-server")
             .env_clear()
-            .envs(env::agent_env(&[(
-                "CODEX_HOME",
-                Some(home.display().to_string()),
-            )]))
+            .envs(env::agent_env(&overrides))
             .current_dir(env::home_dir())
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -720,31 +722,36 @@ impl CodexThread {
     }
 }
 
-/// Pool of app-servers keyed by CODEX_HOME.
+/// Pool of app-servers keyed by CODEX_HOME and proxy: one process carries
+/// every thread of an account that goes out the same way.
 #[derive(Default)]
 pub struct Pool {
-    servers: tokio::sync::Mutex<HashMap<PathBuf, Arc<CodexServer>>>,
+    servers: tokio::sync::Mutex<HashMap<ServerKey, Arc<CodexServer>>>,
 }
 
+/// CODEX_HOME and the proxy the app-server goes out through.
+type ServerKey = (PathBuf, Option<ProxyEnv>);
+
 impl Pool {
-    pub async fn get(&self, home: &Path) -> Result<Arc<CodexServer>> {
+    pub async fn get(&self, home: &Path, proxy: Option<&ProxyEnv>) -> Result<Arc<CodexServer>> {
+        let key = (home.to_path_buf(), proxy.cloned());
         let mut map = self.servers.lock().await;
-        if let Some(s) = map.get(home).filter(|s| s.is_alive()) {
+        if let Some(s) = map.get(&key).filter(|s| s.is_alive()) {
             return Ok(s.clone());
         }
-        let s = CodexServer::start(home).await?;
-        map.insert(home.to_path_buf(), s.clone());
+        let s = CodexServer::start(home, proxy).await?;
+        map.insert(key, s.clone());
         Ok(s)
     }
 
-    /// The running app-server for `home`, if Glaude already started one.
+    /// A running app-server for `home` (any proxy), if Glaude started one.
     pub async fn existing(&self, home: &Path) -> Option<Arc<CodexServer>> {
         self.servers
             .lock()
             .await
-            .get(home)
-            .filter(|s| s.is_alive())
-            .cloned()
+            .iter()
+            .find(|((h, _), s)| h == home && s.is_alive())
+            .map(|(_, s)| s.clone())
     }
 
     pub async fn shutdown_all(&self) {

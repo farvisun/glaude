@@ -666,7 +666,34 @@ function mockControl(convId: string, req: Record<string, unknown>): unknown {
 	throw new Error(`${String(req.subtype)} is not available`);
 }
 
+const MOCK_PROXIES = "glaude.mock.proxies";
+
 export const mockBackend: Record<string, (args: Record<string, unknown>) => unknown> = {
+	proxies_get: () =>
+		JSON.parse(localStorage.getItem(MOCK_PROXIES) ?? "null") ?? { proxies: [], appDefault: null, byAccount: {}, byProject: {}, terminals: true },
+	proxies_set: (args) => {
+		const s = args.settings as { proxies: { name: string; url: string }[] };
+		const bad = s.proxies.find((p) => !/^(https?|socks5h?|socks4):\/\//i.test(p.url.trim()));
+		if (bad) throw new Error(`${bad.name}: the address must start with http://, https:// or socks5://`);
+		localStorage.setItem(MOCK_PROXIES, JSON.stringify(s));
+	},
+	proxy_check: async (args) => {
+		await sleep(900);
+		const url = String(args.url);
+		if (/fail|:1\b|:1$/i.test(url))
+			return {
+				probes: ["Anthropic", "OpenAI", "Exit address"].map((target) => ({ target, ok: false, error: "Failed to connect to proxy" })),
+			};
+		return {
+			probes: [
+				{ target: "Anthropic", ok: true, status: 401, ms: 312 },
+				{ target: "OpenAI", ok: true, status: 401, ms: 448 },
+				{ target: "Exit address", ok: true, status: 200, ms: 205 },
+			],
+			ip: "185.220.101.7",
+			country: "DE",
+		};
+	},
 	app_info: (): AppInfo => ({
 		version: "0.1.0",
 		os: "macos",

@@ -1,5 +1,6 @@
 // Starting conversations and the actions a conversation view can take.
 import { toast } from "svelte-sonner";
+import { proxies } from "./proxies.svelte";
 import { call, channel, inTauri } from "$lib/ipc";
 import type { Attachment, Block, ConvEvent, FileDiff, Item, Provider, QueuedMessage } from "$lib/types";
 import { loadNewConv } from "./newconv";
@@ -29,6 +30,8 @@ export interface StartSpec {
 	resumeAt?: string;
 	/** Claude: run the session as this agent. */
 	agent?: string;
+	/** Saved proxy id, "none", or undefined for the defaults (Settings → Network). */
+	proxy?: string;
 }
 
 export function permissionModes(p: Provider): { value: string; label: string }[] {
@@ -148,6 +151,8 @@ export async function restoreConversations() {
 			sessionId: s.sessionId,
 		});
 		specs.set(id, s.spec);
+		conv.proxy = s.spec.proxy;
+		void proxies.ready().then(() => (conv.proxyActive = proxies.resolve(s.spec, s.spec.proxy).id));
 		conv.sideOf = s.sideOf ?? null;
 		conv.reviewOf = s.reviewOf ?? null;
 		if (live.has(id)) void attach(conv);
@@ -220,9 +225,13 @@ function onBatch(conv: Conversation, batch: ConvEvent[]) {
 
 async function connect(conv: Conversation, spec: StartSpec): Promise<boolean> {
 	specs.set(conv.id, spec);
+	await proxies.ready();
+	const net = proxies.resolve(spec, spec.proxy);
+	conv.proxy = spec.proxy;
+	conv.proxyActive = net.id;
 	try {
 		const ch = await channel<ConvEvent[]>((batch) => onBatch(conv, batch));
-		await call("conv_start", { convId: conv.id, spec, onEvent: ch.raw });
+		await call("conv_start", { convId: conv.id, spec: { ...spec, proxy: net.id ?? "none" }, onEvent: ch.raw });
 		conv.alive = true;
 		saveConv(conv);
 		return true;
@@ -268,14 +277,35 @@ export function startIdleReaper() {
 }
 
 /** Focus the tab of a past session if it is open, otherwise resume it. */
-export function openSession(s: { provider: Provider; id: string; cwd: string; title?: string; account?: string }) {
+export function openSession(s: { provider: Provider; id: string; cwd: string; title?: string; account?: string }, paneId?: string) {
 	triage.visit(`${s.provider}:${s.id}`);
 	const open = Object.values(conversations.byId).find((c) => c.session.sessionId === s.id);
 	if (open) {
 		const tab = Object.values(layout.tabs).find((t) => t.ref === open.id);
 		if (tab) return layout.activate(tab.id);
 	}
-	void startConversation({ provider: s.provider, account: s.account ?? "default", cwd: s.cwd, resume: s.id, title: s.title });
+	void startConversation({ provider: s.provider, account: s.account ?? "default", cwd: s.cwd, resume: s.id, title: s.title }, paneId);
+}
+
+/** Open a past session beside the focused pane (moving its tab there if it is open). */
+export function openSessionSplit(s: { provider: Provider; id: string; cwd: string; title?: string; account?: string }, edge: "right" | "bottom") {
+	const open = Object.values(conversations.byId).find((c) => c.session.sessionId === s.id);
+	const tab = open && Object.values(layout.tabs).find((t) => t.ref === open.id);
+	if (tab) {
+		const leaf = layout.leafOfTab(tab.id);
+		if (leaf && leaf.tabs.length > 1) layout.splitWith(leaf.id, edge, tab.id);
+		else layout.activate(tab.id);
+		return;
+	}
+	openSession(s, layout.splitNew(layout.focusedLeaf.id, edge) ?? undefined);
+}
+
+/** A past session in the CLI's own terminal UI. */
+export function resumeInTerminal(s: { provider: Provider; id: string; cwd: string; title?: string; account?: string }) {
+	const open = Object.values(conversations.byId).find((c) => c.session.sessionId === s.id);
+	if (open) return openInTerminal(open);
+	const tool = s.provider === "claude" ? "claude" : "codex";
+	ui.openTerminal({ cwd: s.cwd, run: { provider: s.provider, account: s.account ?? "default", resume: s.id } }, `${tool} · ${s.title || "session"}`);
 }
 
 /** Restart an ended process, resuming the same session. */
@@ -325,7 +355,10 @@ export async function openInTerminal(conv: Conversation) {
 	}
 	conv.alive = false;
 	const tool = conv.provider === "claude" ? "claude" : "codex";
-	ui.openTerminal({ cwd: conv.cwd, run: { provider: conv.provider, account: conv.account, resume: sid } }, `${tool} · ${conv.title || "session"}`);
+	ui.openTerminal(
+		{ cwd: conv.cwd, run: { provider: conv.provider, account: conv.account, resume: sid }, proxy: conv.proxyActive ?? "none" },
+		`${tool} · ${conv.title || "session"}`,
+	);
 }
 
 /** Open http(s)/mailto links from rendered messages in the system browser. */
@@ -338,6 +371,33 @@ export async function openLink(href: string) {
 }
 
 export const convActions = {
+	/** Use another proxy (id, "none", or undefined for the defaults). A
+	 *  running process restarts on the same session to pick it up. */
+	async setProxy(conv: Conversation, choice: string | undefined) {
+		const spec = specs.get(conv.id);
+		if (!spec) return;
+		if (conv.running) {
+			showError("The agent is still working", "Stop the turn or wait for it to finish, then change the proxy.");
+			return;
+		}
+		const next: StartSpec = { ...spec, proxy: choice };
+		specs.set(conv.id, next);
+		conv.proxy = choice;
+		saveConv(conv);
+		const target = proxies.resolve(next, choice).id;
+		if (target === conv.proxyActive) return;
+		if (!conv.alive) {
+			conv.proxyActive = target;
+			return;
+		}
+		try {
+			await call("conv_close", { convId: conv.id });
+		} catch {
+			/* already stopped */
+		}
+		conv.alive = false;
+		if (await ensureAlive(conv)) toast(target ? `Now using ${proxies.byId(target)?.name}` : "Now connecting directly", { description: "The session continues where it was." });
+	},
 	async send(conv: Conversation, text: string, attachments: Attachment[]) {
 		conv.lastActivity = Date.now();
 		const btw = /^\/btw(?:\s+([\s\S]*))?$/.exec(text.trim());

@@ -29,6 +29,8 @@
 	import Minus from "@lucide/svelte/icons/minus";
 	import Plus from "@lucide/svelte/icons/plus";
 	import Bookmark from "@lucide/svelte/icons/bookmark";
+	import Globe from "@lucide/svelte/icons/globe";
+	import NetworkSection from "./settings/NetworkSection.svelte";
 	import Pencil from "@lucide/svelte/icons/pencil";
 	import Trash from "@lucide/svelte/icons/trash-2";
 	import { prompts, slugOf } from "$lib/state/prompts.svelte";
@@ -40,6 +42,7 @@
 		{ id: "conversations", title: "Conversations", icon: MessagesSquare, keys: ["statuslineScript", "progressPanel", "compactTools", "editor"] },
 		{ id: "background", title: "Background & alerts", icon: BellRing, keys: ["keepAgents", "idleMinutes", "notifyDone", "notifyWaiting", "notifyErrors", "notifyClosed", "notifySound", "alertWaitMinutes", "alertLongMinutes"] },
 		{ id: "terminal", title: "Terminal", icon: SquareTerminal, keys: ["termFont", "termFontCustom", "termFontSize", "termCursor", "termCursorBlink", "termShell"] },
+		{ id: "network", title: "Network", icon: Globe, keys: [] },
 		{ id: "prompts", title: "Saved prompts", icon: Bookmark, keys: [] },
 		{ id: "keys", title: "Keyboard shortcuts", icon: Keyboard, keys: [] },
 	] as const;
@@ -114,7 +117,6 @@
 	const mod = isMac ? "⌘" : "Ctrl+";
 	const shortcuts: [string, string][] = [
 		["New conversation", `${mod}N`],
-		["New terminal", `${mod}T`],
 		["Close tab", `${mod}W`],
 		["Next / previous tab", isMac ? "⌃Tab / ⌃⇧Tab" : "Ctrl+Tab / Ctrl+Shift+Tab"],
 		["Go to tab 1–9", `${mod}1 … ${mod}9`],
@@ -122,7 +124,10 @@
 		["Search history", `${mod}K`],
 		["Toggle sidebar", `${mod}B`],
 		["Changes of the project", isMac ? "⇧⌘G" : "Ctrl+Shift+G"],
-		["Terminal under the conversation", "Ctrl+`"],
+		["Terminal panel", "Ctrl+`"],
+		["New terminal in the panel", `Ctrl+Shift+\` or ${mod}T`],
+		["Split the terminal (in the panel)", `${mod}\\`],
+		["Progress panel", isMac ? "⌥⌘P" : "Ctrl+Alt+P"],
 		["Side chat", "/btw <question>"],
 		["Send / queue", prefs.sendKey === "enter" ? "↵" : `${mod}↵`],
 		["Send into the running turn", prefs.sendKey === "enter" ? `${mod}↵` : isMac ? "⇧⌘↵" : "Ctrl+Shift+↵"],
@@ -453,6 +458,10 @@
 						/>
 					</SettingRow>
 				</section>
+			{/if}
+
+			{#if visible("network")}
+				<NetworkSection />
 			{/if}
 
 			{#if visible("prompts")}

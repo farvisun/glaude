@@ -35,6 +35,8 @@ pub struct ClaudeSpec {
     pub agent: Option<String>,
     /// When resuming, replay the transcript into the UI first.
     pub load_history: bool,
+    /// Proxy for the CLI's network traffic.
+    pub proxy: Option<glaude_core::proxy::ProxyEnv>,
 }
 
 impl ClaudeSpec {
@@ -93,14 +95,18 @@ impl ClaudeSpec {
             .config_dir
             .as_ref()
             .map(|d| d.display().to_string().trim_end_matches('/').to_string());
-        env::agent_env(&[
+        let mut overrides = vec![
             ("CLAUDE_CONFIG_DIR", dir),
             // Lets the UI rewind file edits to any earlier message.
             (
                 "CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING",
                 Some("1".into()),
             ),
-        ])
+        ];
+        if let Some(p) = &self.proxy {
+            overrides.extend(p.vars());
+        }
+        env::agent_env(&overrides)
     }
 }
 

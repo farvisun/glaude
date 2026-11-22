@@ -48,7 +48,7 @@ async fn command_with_approval_then_resume() {
     let cwd = dir.canonicalize().unwrap().display().to_string();
     let home = dirs::home_dir().unwrap().join(".codex");
 
-    let server = CodexServer::start(&home).await.expect("app-server");
+    let server = CodexServer::start(&home, None).await.expect("app-server");
     let log: Log = Arc::default();
     let spec = CodexSpec {
         cwd: cwd.clone(),
@@ -160,7 +160,7 @@ async fn command_with_approval_then_resume() {
 #[ignore]
 async fn lists_threads_and_models() {
     let home = dirs::home_dir().unwrap().join(".codex");
-    let server = CodexServer::start(&home).await.expect("app-server");
+    let server = CodexServer::start(&home, None).await.expect("app-server");
     let threads = server.list_threads(150).await.expect("thread/list");
     eprintln!(
         "{} threads; newest: {:?}",
