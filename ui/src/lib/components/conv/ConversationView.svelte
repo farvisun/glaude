@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { conversations } from "$lib/state/conversations.svelte";
 	import { prefs } from "$lib/state/prefs.svelte";
-	import { convActions, permissionModes } from "$lib/state/sessions";
+	import { convActions, openLink, permissionModes } from "$lib/state/sessions";
 	import type { Item } from "$lib/types";
 	import ItemView from "./ItemView.svelte";
 	import Composer from "./Composer.svelte";
@@ -16,6 +16,13 @@
 	let scroller = $state<HTMLDivElement>();
 	let atBottom = $state(true);
 	let composer = $state<{ focus: () => void }>();
+
+	function onClick(e: MouseEvent) {
+		const a = (e.target as HTMLElement).closest("a[href]") as HTMLAnchorElement | null;
+		if (!a) return;
+		e.preventDefault();
+		openLink(a.getAttribute("href") ?? "");
+	}
 
 	function onScroll() {
 		if (!scroller) return;
@@ -53,7 +60,8 @@
 {#if conv}
 	<div class="flex h-full min-h-0">
 		<div class="flex min-w-0 flex-1 flex-col">
-			<div class="scrollbar-thin min-h-0 flex-1 overflow-y-auto" bind:this={scroller} onscroll={onScroll}>
+			<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+			<div class="scrollbar-thin min-h-0 flex-1 overflow-y-auto" bind:this={scroller} onscroll={onScroll} onclick={onClick}>
 				<div class="mx-auto flex max-w-[52rem] flex-col gap-4 px-5 pt-6 pb-8" bind:this={content}>
 					{#if conv.loading}
 						<div class="flex flex-col gap-3">

@@ -3,10 +3,13 @@ import { layout } from "./layout.svelte";
 
 class UiState {
 	newConversationOpen = $state(false);
+	/** Folder to preselect in the new-conversation dialog. */
+	newConversationCwd = $state<string | null>(null);
 	searchOpen = $state(false);
 	sessionsLoading = $state(false);
 
-	openNewConversation() {
+	openNewConversation(cwd?: string) {
+		this.newConversationCwd = cwd ?? null;
 		this.newConversationOpen = true;
 	}
 

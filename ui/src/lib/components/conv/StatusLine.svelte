@@ -88,7 +88,7 @@
 		<LimitBar label="5h" win={conv.limits.fiveHour} />
 		<LimitBar label="7d" win={conv.limits.week} />
 
-		<span class="ms-auto inline-flex min-w-0 items-center gap-3">
+		<span class="ms-auto inline-flex min-w-0 items-center gap-3 overflow-hidden">
 			{#if elapsed}
 				<span class="inline-flex items-center gap-1 {conv.turnStartedAt ? 'text-foreground' : ''}"
 					><Timer class="size-3" />{fmtDuration(elapsed)}</span
@@ -99,11 +99,11 @@
 					>{basename(conv.cwd)}</span
 				></span
 			>
-			<span class="inline-flex items-center gap-1"><User class="size-3" />{conv.account}</span>
+			<span class="inline-flex min-w-0 items-center gap-1"><User class="size-3 shrink-0" /><span class="truncate">{conv.account}</span></span>
 		</span>
 	{/if}
 	<button
-		class="hover:text-foreground {scriptLine ? 'ms-auto' : ''} {prefs.progressPanel ? 'text-foreground' : ''}"
+		class="hover:text-foreground shrink-0 {scriptLine ? 'ms-auto' : ''} {prefs.progressPanel ? 'text-foreground' : ''}"
 		aria-label="Toggle progress panel"
 		onclick={() => {
 			prefs.progressPanel = !prefs.progressPanel;

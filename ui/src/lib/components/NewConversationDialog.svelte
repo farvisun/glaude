@@ -66,6 +66,7 @@
 
 	$effect(() => {
 		if (!ui.newConversationOpen) return;
+		if (ui.newConversationCwd) cwd = ui.newConversationCwd;
 		call<AccountOption[]>("accounts_brief")
 			.then((list) => (accounts = list))
 			.catch(() => (accounts = []));

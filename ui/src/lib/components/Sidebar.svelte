@@ -14,10 +14,19 @@
 	import { layout } from "$lib/state/layout.svelte";
 	import { isMac } from "$lib/state/prefs.svelte";
 	import { ui } from "$lib/state/ui.svelte";
+	import { history } from "$lib/state/history.svelte";
+	import SessionList from "./SessionList.svelte";
+	import { onMount } from "svelte";
 
 	let { onCollapse }: { onCollapse: () => void } = $props();
 
 	const mod = isMac ? "⌘" : "Ctrl";
+
+	onMount(() => {
+		history.refresh();
+		const t = setInterval(() => history.refresh(), 60_000);
+		return () => clearInterval(t);
+	});
 </script>
 
 <aside class="bg-sidebar text-sidebar-foreground flex h-full flex-col whitespace-nowrap">
@@ -54,17 +63,7 @@
 	<div class="scrollbar-thin min-h-0 flex-1 overflow-y-auto px-2">
 		<section class="py-2">
 			<h2 class="text-muted-foreground px-1 pb-1 text-xs font-medium">Sessions</h2>
-			{#if ui.sessionsLoading}
-				<div class="flex flex-col gap-2 px-1 py-1">
-					{#each [0, 1, 2, 3] as i (i)}
-						<div class="bg-sidebar-accent h-9 animate-pulse rounded-md"></div>
-					{/each}
-				</div>
-			{:else}
-				<div class="text-muted-foreground rounded-md px-2 py-6 text-center text-[13px] leading-relaxed">
-					No sessions yet.<br />Start one with <span class="text-sidebar-foreground font-medium">New conversation</span>.
-				</div>
-			{/if}
+			<SessionList />
 		</section>
 	</div>
 

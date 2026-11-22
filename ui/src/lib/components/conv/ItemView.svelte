@@ -40,10 +40,16 @@
 	</div>
 {:else if item.kind === "reasoning"}
 	<div class="text-muted-foreground">
-		<button class="hover:text-foreground flex items-center gap-1.5 text-[13px]" onclick={() => (thinkingOpen = !thinkingOpen)}>
+		<button
+			class="hover:text-foreground flex items-center gap-1.5 text-[13px] disabled:hover:text-inherit"
+			disabled={item.blocks.length === 0}
+			onclick={() => (thinkingOpen = !thinkingOpen)}
+		>
 			<Brain class="size-3.5 {item.streaming ? 'text-primary animate-pulse' : ''}" />
 			<span>{item.streaming ? "Thinking…" : "Thought"}</span>
-			<ChevronRight class="size-3.5 transition-transform {thinkingOpen ? 'rotate-90' : ''}" />
+			{#if item.blocks.length}
+				<ChevronRight class="size-3.5 transition-transform {thinkingOpen ? 'rotate-90' : ''}" />
+			{/if}
 		</button>
 		{#if thinkingOpen}
 			<div class="border-border mt-1.5 ms-1.5 border-s ps-3 text-[13px] opacity-90">
