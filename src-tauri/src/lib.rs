@@ -4,6 +4,7 @@ mod conv;
 mod files;
 mod git;
 pub mod host;
+mod menu;
 mod pty;
 mod search;
 mod sink;
@@ -57,6 +58,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .manage(host::client::HostState::default())
+        .manage(menu::AppPrefs::default())
         .manage(conv::CodexPool::default())
         .manage(pty::Ptys::default())
         .manage(search::SearchState::default())
@@ -65,7 +67,24 @@ pub fn run() {
             let state = app.state::<search::SearchState>().inner().clone();
             state.0.refresh(app.handle().clone());
             exit_on_signals(app.handle().clone());
+            #[cfg(target_os = "macos")]
+            app.set_menu(menu::app_menu(app.handle())?)?;
+            app.on_menu_event(|app, event| menu::on_menu(app, event.id().as_ref()));
+            if let Err(e) = menu::create_tray(app.handle()) {
+                tracing::warn!("no menu bar icon: {e}");
+            }
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            // macOS: closing the window keeps Glaude in the menu bar and the
+            // Dock; Cmd+Q quits.
+            #[cfg(target_os = "macos")]
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                let _ = window.hide();
+            }
+            #[cfg(not(target_os = "macos"))]
+            let _ = (window, event);
         })
         .invoke_handler(tauri::generate_handler![
             commands::app_info,
@@ -109,6 +128,8 @@ pub fn run() {
             files::open_path,
             files::editors_available,
             files::read_text_file,
+            menu::app_prefs_set,
+            menu::tray_update,
             conv::conv_start,
             conv::conv_attach,
             conv::host_list,
@@ -130,10 +151,30 @@ pub fn run() {
         ])
         .build(tauri::generate_context!())
         .expect("error while building Glaude")
-        .run(|app, event| {
-            if let tauri::RunEvent::Exit = event {
+        .run(|app, event| match event {
+            #[cfg(target_os = "macos")]
+            tauri::RunEvent::Reopen { .. } => menu::show_main(app),
+            tauri::RunEvent::Exit => {
+                // Settings → Background: quitting can also stop the agents.
+                let keep = app
+                    .state::<menu::AppPrefs>()
+                    .keep_agents
+                    .load(std::sync::atomic::Ordering::Relaxed);
+                if !keep {
+                    let host = app.state::<host::client::HostState>();
+                    tauri::async_runtime::block_on(async {
+                        if let Some(c) = host.current().await {
+                            let _ = tokio::time::timeout(
+                                std::time::Duration::from_secs(3),
+                                c.call("close_all", serde_json::json!({})),
+                            )
+                            .await;
+                        }
+                    });
+                }
                 conv::close_all(&app.state::<conv::CodexPool>());
                 pty::close_all(&app.state::<pty::Ptys>());
             }
+            _ => {}
         });
 }

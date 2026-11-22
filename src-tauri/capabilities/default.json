@@ -8,6 +8,7 @@
     "core:window:allow-start-dragging",
     "core:window:allow-set-badge-count",
     "core:window:allow-request-user-attention",
+    "core:webview:allow-set-webview-zoom",
     "notification:default",
     "dialog:allow-open",
     "opener:allow-open-url",

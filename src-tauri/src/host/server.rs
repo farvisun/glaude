@@ -97,6 +97,8 @@ pub struct Host {
     token: String,
     quiet_since: Mutex<Option<Instant>>,
     exit: Notify,
+    /// Desktop notifications while no window is open (app setting).
+    notify: std::sync::atomic::AtomicBool,
 }
 
 fn now_ms() -> u64 {
@@ -293,7 +295,7 @@ impl HostConv {
         let alone = self
             .host
             .upgrade()
-            .is_some_and(|h| h.clients.lock().is_empty());
+            .is_some_and(|h| h.clients.lock().is_empty() && h.notify.load(Ordering::Relaxed));
         if alone {
             let folder = std::path::Path::new(&self.spec.lock().cwd)
                 .file_name()
@@ -499,6 +501,7 @@ impl Host {
             token,
             quiet_since: Mutex::new(Some(Instant::now())),
             exit: Notify::new(),
+            notify: std::sync::atomic::AtomicBool::new(true),
         })
     }
 
@@ -754,6 +757,20 @@ impl Host {
             }
             "close" => {
                 if let Some(c) = self.convs.lock().remove(conv_id) {
+                    c.close();
+                }
+                self.sweep();
+                Ok(Value::Null)
+            }
+            "config" => {
+                if let Some(n) = p.get("notify").and_then(Value::as_bool) {
+                    self.notify.store(n, Ordering::Relaxed);
+                }
+                Ok(Value::Null)
+            }
+            "close_all" => {
+                let all: Vec<_> = self.convs.lock().drain().map(|(_, c)| c).collect();
+                for c in all {
                     c.close();
                 }
                 self.sweep();

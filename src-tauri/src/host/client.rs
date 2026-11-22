@@ -244,7 +244,24 @@ impl HostState {
             return Ok(c.clone());
         }
         let c = connect(app).await?;
+        // The app's settings the host uses while no window is open.
+        use tauri::Manager;
+        let notify = app
+            .state::<crate::menu::AppPrefs>()
+            .notify_closed
+            .load(Ordering::Relaxed);
+        let _ = c.call("config", json!({ "notify": notify })).await;
         *g = Some(c.clone());
         Ok(c)
+    }
+
+    /// The connection if there is a live one (never starts the host).
+    pub async fn current(&self) -> Option<Arc<HostClient>> {
+        self.0
+            .lock()
+            .await
+            .as_ref()
+            .filter(|c| !c.is_dead())
+            .cloned()
     }
 }

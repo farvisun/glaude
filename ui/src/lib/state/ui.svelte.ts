@@ -14,6 +14,10 @@ class UiState {
 	sessionPanel = $state<{ convId: string; tab?: string } | null>(null);
 	/** Rewind dialog for a user message. */
 	rewind = $state<{ convId: string; itemId: string } | null>(null);
+	/** Settings section to show next (from the menu). */
+	settingsSection = $state<string | null>(null);
+	/** Set by the app shell: show or hide the sidebar. */
+	toggleSidebar: () => void = () => {};
 	/** Actions for a path clicked in a reply. */
 	pathMenu = $state<{ hit: import("./paths").PathHit; x: number; y: number } | null>(null);
 

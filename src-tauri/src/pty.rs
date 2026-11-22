@@ -48,6 +48,9 @@ pub struct PtySpec {
     pub cols: u16,
     pub rows: u16,
     pub run: Option<RunSpec>,
+    /// Settings → Terminal: a shell instead of the login shell.
+    #[serde(default)]
+    pub shell: Option<String>,
 }
 
 fn shell() -> (PathBuf, Vec<String>) {
@@ -77,7 +80,42 @@ fn command(spec: &PtySpec) -> Result<CommandBuilder, String> {
         overrides.push(("LANG", Some("en_US.UTF-8".into())));
     }
     let (program, args) = match &spec.run {
-        None => shell(),
+        None => match spec
+            .shell
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
+            Some(custom) => {
+                let p = PathBuf::from(custom);
+                let p = if p.is_absolute() {
+                    Some(p)
+                } else {
+                    env::which(custom)
+                };
+                match p.filter(|p| p.is_file()) {
+                    Some(p) => {
+                        // POSIX shells start as login shells, like the default.
+                        let name = p
+                            .file_stem()
+                            .map(|n| n.to_string_lossy().to_lowercase())
+                            .unwrap_or_default();
+                        let login =
+                            ["zsh", "bash", "sh", "fish", "ksh", "dash"].contains(&name.as_str());
+                        (
+                            p,
+                            if login {
+                                vec!["-l".to_string()]
+                            } else {
+                                Vec::new()
+                            },
+                        )
+                    }
+                    None => return Err(format!("Shell not found: {custom}")),
+                }
+            }
+            None => shell(),
+        },
         Some(run) if run.provider == "claude" => {
             let bin = env::claude_binary().ok_or("Claude Code CLI not found")?;
             if let Some(dir) = paths::claude_config_dir(&run.account) {
@@ -246,6 +284,7 @@ mod tests {
             cols: 100,
             rows: 30,
             run: None,
+            shell: None,
         };
         let pair = native_pty_system()
             .openpty(PtySize {

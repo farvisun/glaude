@@ -305,11 +305,17 @@ fn scheduled_resume_sends_continue() {
     let mut host = env.spawn_host();
     let mut c = env.connect();
     start(&mut c, "c1", &env.cwd());
-    c.call("send", json!({"convId": "c1", "text": "hello", "attachments": []}));
+    c.call(
+        "send",
+        json!({"convId": "c1", "text": "hello", "attachments": []}),
+    );
     c.wait_event(15, assistant_says("echo: hello"));
 
     let at = chrono::Utc::now() + chrono::Duration::seconds(2);
-    let r = c.call("schedule", json!({"convId": "c1", "resumeAt": at.to_rfc3339()}));
+    let r = c.call(
+        "schedule",
+        json!({"convId": "c1", "resumeAt": at.to_rfc3339()}),
+    );
     assert!(r.get("error").is_none(), "{r}");
     c.wait_event(5, |e| e["type"] == "schedule" && e["resumeAt"].is_string());
     // The host continues on its own at that time, then clears the schedule.
@@ -322,4 +328,22 @@ fn scheduled_resume_sends_continue() {
     assert!(cleared, "schedule cleared");
     drop(c);
     assert!(wait_exit(&mut host, 20));
+}
+
+#[test]
+fn close_all_stops_running_agents() {
+    let env = Env::new("closeall");
+    let mut host = env.spawn_host();
+    let mut c = env.connect();
+    let r = c.call("config", json!({"notify": false}));
+    assert!(r.get("error").is_none(), "{r}");
+    start(&mut c, "c1", &env.cwd());
+    c.call("send", json!({"convId": "c1", "text": "slow job", "attachments": []}));
+    c.wait_event(10, |e| e["type"] == "turn" && e["state"] != "idle");
+    // Quitting with "keep agents working" off.
+    c.call("close_all", json!({}));
+    let list = c.call("list", json!({}));
+    assert_eq!(list["ok"], json!([]), "{list}");
+    drop(c);
+    assert!(wait_exit(&mut host, 20), "nothing left: the host exits");
 }
