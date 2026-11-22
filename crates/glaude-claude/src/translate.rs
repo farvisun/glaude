@@ -1195,6 +1195,9 @@ impl Translator {
                 level: "error".into(),
                 text: "Usage limit reached for this account.".into(),
             });
+            out.events.push(ConvEvent::Limited {
+                until: info.get("resetsAt").and_then(to_rfc3339),
+            });
         }
     }
 

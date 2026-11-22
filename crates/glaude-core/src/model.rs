@@ -479,4 +479,85 @@ pub enum ConvEvent {
         #[serde(skip_serializing_if = "Option::is_none")]
         code: Option<i32>,
     },
+    /// Messages waiting for the current turn to end (kept by the host).
+    #[serde(rename_all = "camelCase")]
+    Queue { items: Vec<QueuedMessage> },
+    /// Usage-limit state and a scheduled "continue" (RFC 3339 times).
+    #[serde(rename_all = "camelCase")]
+    Schedule {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        limited_until: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        resume_at: Option<String>,
+    },
+    /// The provider refused a request for a usage limit (until = reset).
+    #[serde(rename_all = "camelCase")]
+    Limited {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        until: Option<String>,
+    },
+}
+
+/// A message typed while a turn was running, sent when it ends.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QueuedMessage {
+    pub id: String,
+    pub text: String,
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub attachments: Vec<Attachment>,
+}
+
+impl SessionInfo {
+    /// Take every field `other` sets (the UI store does the same).
+    pub fn merge(&mut self, other: SessionInfo) {
+        macro_rules! opt {
+            ($($f:ident),*) => { $( if other.$f.is_some() { self.$f = other.$f; } )* };
+        }
+        macro_rules! list {
+            ($($f:ident),*) => { $( if !other.$f.is_empty() { self.$f = other.$f; } )* };
+        }
+        opt!(
+            session_id,
+            model,
+            effort,
+            permission_mode,
+            cwd,
+            git_branch,
+            context_used,
+            context_window,
+            cost_usd,
+            lines_added,
+            lines_removed,
+            version,
+            account_email,
+            output_style,
+            mcp_servers
+        );
+        list!(slash_commands, models, agents, output_styles);
+    }
+}
+
+impl Limits {
+    pub fn merge(&mut self, other: Limits) {
+        if other.five_hour.is_some() {
+            self.five_hour = other.five_hour;
+        }
+        if other.week.is_some() {
+            self.week = other.week;
+        }
+        if other.plan.is_some() {
+            self.plan = other.plan;
+        }
+    }
+
+    /// When a window that is used up resets (the earliest one).
+    pub fn reset_of_full(&self) -> Option<String> {
+        [&self.five_hour, &self.week]
+            .into_iter()
+            .flatten()
+            .filter(|w| w.used >= 99.0)
+            .filter_map(|w| w.resets_at.clone())
+            .min()
+    }
 }

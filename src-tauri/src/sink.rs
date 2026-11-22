@@ -1,24 +1,12 @@
-//! Batches conversation events and ships them to the webview over a
-//! Channel at most every FLUSH_MS, merging streaming block updates so a
-//! fast stream costs one IPC message per frame, not one per token.
-
-use std::sync::Arc;
-use std::time::Duration;
+//! Merging of streaming block updates: the host batches a conversation's
+//! events and ships them every few milliseconds, so a fast stream costs one
+//! message per frame, not one per token.
 
 use glaude_core::model::ConvEvent;
-use parking_lot::Mutex;
-use tauri::ipc::Channel;
-
-const FLUSH_MS: u64 = 24;
-
-pub struct EventSink {
-    queue: Mutex<Vec<ConvEvent>>,
-    closed: Mutex<bool>,
-}
 
 /// Merge `next` into the queue, collapsing consecutive block updates of the
 /// same item.
-fn push_merged(queue: &mut Vec<ConvEvent>, next: ConvEvent) {
+pub(crate) fn push_merged(queue: &mut Vec<ConvEvent>, next: ConvEvent) {
     if let ConvEvent::Blocks { id, from, blocks } = &next {
         if let Some(ConvEvent::Blocks {
             id: pid,
@@ -39,43 +27,6 @@ fn push_merged(queue: &mut Vec<ConvEvent>, next: ConvEvent) {
         }
     }
     queue.push(next);
-}
-
-impl EventSink {
-    pub fn new(channel: Channel<Vec<ConvEvent>>) -> Arc<Self> {
-        let sink = Arc::new(Self {
-            queue: Mutex::new(Vec::new()),
-            closed: Mutex::new(false),
-        });
-        let weak = Arc::downgrade(&sink);
-        tauri::async_runtime::spawn(async move {
-            let mut tick = tokio::time::interval(Duration::from_millis(FLUSH_MS));
-            tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-            loop {
-                tick.tick().await;
-                let Some(s) = weak.upgrade() else { break };
-                let batch = std::mem::take(&mut *s.queue.lock());
-                if !batch.is_empty() && channel.send(batch).is_err() {
-                    break;
-                }
-                if *s.closed.lock() && s.queue.lock().is_empty() {
-                    break;
-                }
-            }
-        });
-        sink
-    }
-
-    pub fn push(&self, events: Vec<ConvEvent>) {
-        let mut q = self.queue.lock();
-        for e in events {
-            push_merged(&mut q, e);
-        }
-    }
-
-    pub fn close(&self) {
-        *self.closed.lock() = true;
-    }
 }
 
 #[cfg(test)]

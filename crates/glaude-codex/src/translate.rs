@@ -637,6 +637,15 @@ impl Translator {
                 if p.get("willRetry").and_then(Value::as_bool).unwrap_or(false) {
                     self.set_turn(&mut out, TurnState::Retrying, Some(msg));
                 } else {
+                    // Usage limit: the host offers to continue at reset.
+                    let info = p.get("error").and_then(|e| e.get("codexErrorInfo"));
+                    let limited = info
+                        .map(|i| i.to_string().contains("usageLimitExceeded"))
+                        .unwrap_or(false)
+                        || msg.to_lowercase().contains("usage limit");
+                    if limited {
+                        out.push(ConvEvent::Limited { until: None });
+                    }
                     let id = self.next_id("sys");
                     out.push(ConvEvent::Item {
                         item: Item::System {

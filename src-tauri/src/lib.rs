@@ -1,6 +1,7 @@
 mod accounts;
 mod commands;
 mod conv;
+pub mod host;
 mod pty;
 mod search;
 mod sink;
@@ -53,7 +54,7 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
-        .manage(conv::Convs::default())
+        .manage(host::client::HostState::default())
         .manage(conv::CodexPool::default())
         .manage(pty::Ptys::default())
         .manage(search::SearchState::default())
@@ -92,6 +93,10 @@ pub fn run() {
             pty::pty_resize,
             pty::pty_close,
             conv::conv_start,
+            conv::conv_attach,
+            conv::host_list,
+            conv::conv_queue,
+            conv::conv_schedule,
             conv::conv_send,
             conv::conv_interrupt,
             conv::conv_permission,
@@ -110,7 +115,7 @@ pub fn run() {
         .expect("error while building Glaude")
         .run(|app, event| {
             if let tauri::RunEvent::Exit = event {
-                conv::close_all(&app.state::<conv::Convs>(), &app.state::<conv::CodexPool>());
+                conv::close_all(&app.state::<conv::CodexPool>());
                 pty::close_all(&app.state::<pty::Ptys>());
             }
         });

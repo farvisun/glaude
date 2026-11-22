@@ -628,6 +628,36 @@ impl CodexThread {
         Ok(())
     }
 
+    /// Add input to the running turn (`turn/steer`); with no turn running
+    /// this is a normal send.
+    pub async fn steer(&self, text: &str, attachments: Vec<Attachment>) -> Result<()> {
+        let turn = self.route.translator.lock().turn_id.clone();
+        let Some(turn_id) = turn else {
+            return self.send(text, attachments).await;
+        };
+        let mut input = Vec::new();
+        for a in attachments.iter().filter(|a| a.mime.starts_with("image/")) {
+            input.push(json!({"type": "localImage", "path": a.path}));
+        }
+        let mut full = text.to_string();
+        for a in attachments.iter().filter(|a| !a.mime.starts_with("image/")) {
+            full.push_str(&format!("\n\nAttached file: {}", a.path));
+        }
+        input.insert(
+            0,
+            json!({"type": "text", "text": full, "text_elements": []}),
+        );
+        let (client_id, events) = self.route.translator.lock().user_message(text, attachments);
+        self.emit(events);
+        self.server
+            .request(
+                "turn/steer",
+                json!({"threadId": self.thread_id, "expectedTurnId": turn_id, "input": input, "clientUserMessageId": client_id}),
+            )
+            .await?;
+        Ok(())
+    }
+
     pub async fn interrupt(&self) -> Result<()> {
         let turn = self.route.translator.lock().turn_id.clone();
         if let Some(turn_id) = turn {
