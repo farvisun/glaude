@@ -140,3 +140,41 @@ CLI to host requests:
   `{usedPercent, windowDurationMins, resetsAt}`.
 - A window of `windowDurationMins >= 1440` is weekly; anything shorter is the
   5h window.
+
+### Observed behaviour (0.171.0, recorded in `fixtures/codex/`)
+
+- Type definitions for the installed version: `codex app-server generate-ts --out <dir>`.
+  Regenerate after a Codex upgrade and diff `ThreadItem.ts`, `ClientRequest.ts`, `ServerRequest.ts`.
+- A turn sends `item/started` for a `commandExecution` *before* the
+  `item/commandExecution/requestApproval` server request; the approval's
+  `itemId` points at it. `serverRequest/resolved` follows our answer.
+- `command` is wrapped (`/bin/zsh -lc "..."`); `commandActions[0].command`
+  holds the plain command and is what the UI shows.
+- Answer approvals with `{"decision": "accept" | "acceptForSession" | "decline" | "cancel"}`.
+  Legacy `execCommandApproval` / `applyPatchApproval` are not used by v2 threads.
+- `fileChange.changes[].diff` is a unified diff for updates and the plain
+  file content for `add`/`delete`; Glaude turns the latter into a diff.
+- `thread/tokenUsage/updated.tokenUsage.last.totalTokens` is the current
+  context use, `modelContextWindow` the window.
+- `account/rateLimits/updated` is not tied to a thread; it is broadcast to
+  every open thread of that app-server. `usedPercent` is a percent;
+  windows of 1440 minutes or more are treated as weekly.
+- `thread/list` defaults to interactive sources; Glaude asks for
+  `cli`, `vscode`, `appServer` and skips `ephemeral` threads.
+- Resume: `thread/resume {excludeTurns: true}`, then page
+  `thread/turns/list {sortDirection: "asc", itemsView: "full"}`.
+- A cold `codex app-server` start plus `thread/list` takes several seconds
+  (MCP servers start on the first thread), so the sidebar loads Codex
+  sessions separately from Claude's.
+- Unhandled server requests (`item/tool/requestUserInput`,
+  `mcpServer/elicitation/request`, `item/permissions/requestApproval`) get a
+  JSON-RPC error reply for now.
+
+### Permission modes (UI value → approval policy / sandbox)
+
+| UI | `approvalPolicy` | `sandbox` (thread) / `sandboxPolicy` (turn) |
+| --- | --- | --- |
+| `full` (default, like mamadoo `--yolo`) | `never` | `danger-full-access` |
+| `on-request` | `on-request` | `workspace-write` |
+| `untrusted` | `untrusted` | `workspace-write` |
+| `read-only` | `on-request` | `read-only` |
