@@ -4,8 +4,14 @@
   "version": "0.1.0",
   "identifier": "com.farvisun.glaude",
   "build": {
-    "beforeDevCommand": { "script": "bun run dev", "cwd": "../ui" },
-    "beforeBuildCommand": { "script": "bun run build", "cwd": "../ui" },
+    "beforeDevCommand": {
+      "script": "bun run dev",
+      "cwd": "../ui"
+    },
+    "beforeBuildCommand": {
+      "script": "bun run build",
+      "cwd": "../ui"
+    },
     "devUrl": "http://localhost:1420",
     "frontendDist": "../ui/dist"
   },
@@ -36,6 +42,18 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "publisher": "farvisun",
+    "copyright": "© 2026 farvisun",
+    "shortDescription": "A fast desktop UI for Claude Code and Codex, built for Persian and RTL",
+    "longDescription": "Glaude runs the Claude Code and Codex CLIs already installed and logged in on this computer, and shows their conversations with correct right-to-left text, permission cards, diffs, terminals, history search and a multi-account manager compatible with mamadoo.",
+    "macOS": {
+      "minimumSystemVersion": "11.0"
+    },
+    "linux": {
+      "deb": {
+        "section": "devel"
+      }
+    }
   }
 }
