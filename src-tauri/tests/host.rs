@@ -298,3 +298,28 @@ fn refuses_a_wrong_token() {
     let _ = host.kill();
     let _ = host.wait();
 }
+
+#[test]
+fn scheduled_resume_sends_continue() {
+    let env = Env::new("sched");
+    let mut host = env.spawn_host();
+    let mut c = env.connect();
+    start(&mut c, "c1", &env.cwd());
+    c.call("send", json!({"convId": "c1", "text": "hello", "attachments": []}));
+    c.wait_event(15, assistant_says("echo: hello"));
+
+    let at = chrono::Utc::now() + chrono::Duration::seconds(2);
+    let r = c.call("schedule", json!({"convId": "c1", "resumeAt": at.to_rfc3339()}));
+    assert!(r.get("error").is_none(), "{r}");
+    c.wait_event(5, |e| e["type"] == "schedule" && e["resumeAt"].is_string());
+    // The host continues on its own at that time, then clears the schedule.
+    c.wait_event(20, assistant_says("echo: continue"));
+    let cleared = c
+        .events
+        .iter()
+        .flat_map(|(_, e)| e)
+        .any(|e| e["type"] == "schedule" && e["resumeAt"].is_null());
+    assert!(cleared, "schedule cleared");
+    drop(c);
+    assert!(wait_exit(&mut host, 20));
+}
