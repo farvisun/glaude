@@ -25,6 +25,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .manage(conv::Convs::default())
+        .manage(conv::CodexPool::default())
         .invoke_handler(tauri::generate_handler![
             commands::app_info,
             commands::default_cwd,
@@ -33,6 +34,8 @@ pub fn run() {
             commands::save_attachment,
             commands::accounts_brief,
             commands::sessions_list,
+            commands::codex_sessions_list,
+            commands::codex_models,
             conv::conv_start,
             conv::conv_send,
             conv::conv_interrupt,
@@ -45,7 +48,7 @@ pub fn run() {
         .expect("error while building Glaude")
         .run(|app, event| {
             if let tauri::RunEvent::Exit = event {
-                conv::close_all(&app.state::<conv::Convs>());
+                conv::close_all(&app.state::<conv::Convs>(), &app.state::<conv::CodexPool>());
             }
         });
 }

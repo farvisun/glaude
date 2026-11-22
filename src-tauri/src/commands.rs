@@ -2,6 +2,7 @@ use glaude_accounts::paths;
 use glaude_core::env;
 use glaude_core::model::Attachment;
 use serde::Serialize;
+use tauri::State;
 use tauri::{AppHandle, Manager};
 use tauri_plugin_dialog::DialogExt;
 
@@ -215,6 +216,7 @@ pub fn accounts_brief() -> Vec<AccountBrief> {
     out
 }
 
+/// Past Claude sessions, newest first.
 #[tauri::command]
 pub async fn sessions_list() -> Result<Vec<glaude_claude::transcript::SessionSummary>, String> {
     tokio::task::spawn_blocking(|| {
@@ -222,4 +224,40 @@ pub async fn sessions_list() -> Result<Vec<glaude_claude::transcript::SessionSum
     })
     .await
     .map_err(err)
+}
+
+/// Past Codex threads. Separate from `sessions_list` because the first call
+/// starts the app-server, which takes several seconds.
+#[tauri::command]
+pub async fn codex_sessions_list(
+    pool: State<'_, crate::conv::CodexPool>,
+) -> Result<Vec<glaude_claude::transcript::SessionSummary>, String> {
+    let server = pool
+        .0
+        .get(&paths::codex_home("default"))
+        .await
+        .map_err(err)?;
+    let threads = server.list_threads(300).await.map_err(err)?;
+    Ok(threads
+        .into_iter()
+        .map(|t| glaude_claude::transcript::SessionSummary {
+            provider: "codex",
+            id: t.id,
+            cwd: t.cwd,
+            title: t.title,
+            updated: t.updated,
+            path: t.path,
+        })
+        .collect())
+}
+
+/// Codex models for the new-conversation dialog.
+#[tauri::command]
+pub async fn codex_models(
+    pool: State<'_, crate::conv::CodexPool>,
+    account: Option<String>,
+) -> Result<Vec<glaude_core::model::ModelChoice>, String> {
+    let home = paths::codex_home(account.as_deref().unwrap_or("default"));
+    let server = pool.0.get(&home).await.map_err(err)?;
+    server.models().await.map_err(err)
 }

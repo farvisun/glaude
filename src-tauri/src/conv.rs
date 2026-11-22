@@ -6,6 +6,7 @@ use std::sync::Arc;
 use base64::Engine;
 use glaude_accounts::paths;
 use glaude_claude::{ClaudeSession, ClaudeSpec};
+use glaude_codex::{CodexSpec, CodexThread};
 use glaude_core::model::{Attachment, ConvEvent};
 use parking_lot::Mutex;
 use serde::Deserialize;
@@ -16,7 +17,12 @@ use crate::sink::EventSink;
 
 pub enum Agent {
     Claude(ClaudeSession),
+    Codex(CodexThread),
 }
+
+/// One `codex app-server` per account home, shared by its threads.
+#[derive(Default)]
+pub struct CodexPool(pub glaude_codex::Pool);
 
 pub struct Conv {
     pub agent: Agent,
@@ -58,6 +64,7 @@ fn err(e: impl std::fmt::Display) -> String {
 #[tauri::command]
 pub async fn conv_start(
     convs: State<'_, Convs>,
+    pool: State<'_, CodexPool>,
     conv_id: String,
     spec: StartSpec,
     on_event: Channel<Vec<ConvEvent>>,
@@ -80,6 +87,22 @@ pub async fn conv_start(
                 load_history: !spec.skip_history,
             };
             Agent::Claude(ClaudeSession::spawn(cs, push).await.map_err(err)?)
+        }
+        "codex" => {
+            let server = pool
+                .0
+                .get(&paths::codex_home(&spec.account))
+                .await
+                .map_err(err)?;
+            let cs = CodexSpec {
+                cwd: spec.cwd.clone(),
+                model: spec.model.clone(),
+                effort: spec.effort.clone(),
+                mode: spec.permission_mode.clone(),
+                resume: spec.resume.clone(),
+                load_history: !spec.skip_history,
+            };
+            Agent::Codex(CodexThread::open(server, cs, push).await.map_err(err)?)
         }
         other => return Err(format!("{other} conversations are not supported yet")),
     };
@@ -137,14 +160,17 @@ pub async fn conv_send(
             .map_err(err)?;
             s.send(&full, images, attachments);
         }
+        Agent::Codex(t) => t.send(&text, attachments).await.map_err(err)?,
     }
     Ok(())
 }
 
 #[tauri::command]
-pub fn conv_interrupt(convs: State<'_, Convs>, conv_id: String) -> Result<(), String> {
-    match &convs.get(&conv_id)?.agent {
+pub async fn conv_interrupt(convs: State<'_, Convs>, conv_id: String) -> Result<(), String> {
+    let conv = convs.get(&conv_id)?;
+    match &conv.agent {
         Agent::Claude(s) => s.interrupt(),
+        Agent::Codex(t) => t.interrupt().await.map_err(err)?,
     }
     Ok(())
 }
@@ -159,6 +185,7 @@ pub fn conv_permission(
 ) -> Result<(), String> {
     match &convs.get(&conv_id)?.agent {
         Agent::Claude(s) => s.answer(&request_id, &option_id, message),
+        Agent::Codex(t) => t.answer(&request_id, &option_id),
     }
     Ok(())
 }
@@ -167,6 +194,7 @@ pub fn conv_permission(
 pub fn conv_set_mode(convs: State<'_, Convs>, conv_id: String, mode: String) -> Result<(), String> {
     match &convs.get(&conv_id)?.agent {
         Agent::Claude(s) => s.set_mode(&mode),
+        Agent::Codex(t) => t.set_mode(&mode),
     }
     Ok(())
 }
@@ -179,15 +207,18 @@ pub fn conv_set_model(
 ) -> Result<(), String> {
     match &convs.get(&conv_id)?.agent {
         Agent::Claude(s) => s.set_model(&model),
+        Agent::Codex(t) => t.set_model(&model),
     }
     Ok(())
 }
 
 #[tauri::command]
 pub fn conv_close(convs: State<'_, Convs>, conv_id: String) -> Result<(), String> {
-    if let Some(conv) = convs.0.lock().remove(&conv_id) {
+    let conv = convs.0.lock().remove(&conv_id);
+    if let Some(conv) = conv {
         match &conv.agent {
             Agent::Claude(s) => s.close(),
+            Agent::Codex(t) => t.close(),
         }
         conv.sink.close();
     }
@@ -195,10 +226,12 @@ pub fn conv_close(convs: State<'_, Convs>, conv_id: String) -> Result<(), String
 }
 
 /// Stop every agent process, e.g. when the app quits.
-pub fn close_all(convs: &Convs) {
+pub fn close_all(convs: &Convs, pool: &CodexPool) {
     for (_, conv) in convs.0.lock().drain() {
         match &conv.agent {
             Agent::Claude(s) => s.close(),
+            Agent::Codex(t) => t.close(),
         }
     }
+    pool.0.shutdown_blocking();
 }
