@@ -1,0 +1,31 @@
+[package]
+name = "glaude"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Desktop UI for Claude Code and Codex with first-class RTL/Persian support"
+
+[lib]
+name = "glaude_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+glaude-core.workspace = true
+glaude-claude.workspace = true
+glaude-codex.workspace = true
+glaude-accounts.workspace = true
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+parking_lot.workspace = true
+tauri = { version = "2", features = [] }
+tauri-plugin-notification = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-opener = "2"
+tauri-plugin-window-state = "2"
