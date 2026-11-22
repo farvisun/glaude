@@ -80,6 +80,16 @@ CLI to host requests:
   - deny: `{"behavior":"deny","message":"…","interrupt":false}`
   - `control_cancel_request{request_id}` withdraws a pending prompt.
 
+### Attachments
+
+- Images go inline as base64 `image` content blocks.
+- Other files are referenced as `@/absolute/path` lines in the message
+  text. Verified on 2.1.329 (haiku): the CLI expands the mention itself in
+  `-p --input-format stream-json` mode; the model answered from the file
+  with no tool call.
+- Codex gets images as `localImage` inputs and other files as an
+  `Attached file: <path>` line; the agent reads them with its own tools.
+
 ### Transcripts
 
 - Path: `<config>/projects/<enc(cwd)>/<sessionId>.jsonl`, where `enc` replaces
