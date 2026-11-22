@@ -70,9 +70,39 @@ pub async fn conv_start(
     on_event: Channel<Vec<ConvEvent>>,
 ) -> Result<(), String> {
     let sink = EventSink::new(on_event);
+    // Git branch for the statusline: read at start and after every turn
+    // (a turn may switch branches); sent only when it changes.
+    let branch = Arc::new(Mutex::new(None::<String>));
+    let cwd_path = std::path::PathBuf::from(&spec.cwd);
+    let branch_event = {
+        let branch = branch.clone();
+        move || -> Option<ConvEvent> {
+            let now = glaude_core::git::branch(&cwd_path);
+            let mut last = branch.lock();
+            if *last == now {
+                return None;
+            }
+            last.clone_from(&now);
+            Some(ConvEvent::Session {
+                info: glaude_core::model::SessionInfo {
+                    git_branch: Some(now.unwrap_or_default()),
+                    ..Default::default()
+                },
+            })
+        }
+    };
     let push = {
         let sink = sink.clone();
-        Arc::new(move |events: Vec<ConvEvent>| sink.push(events)) as glaude_claude::Sink
+        let branch_event = branch_event.clone();
+        Arc::new(move |mut events: Vec<ConvEvent>| {
+            if events
+                .iter()
+                .any(|e| matches!(e, ConvEvent::TurnDone { .. } | ConvEvent::Reset { .. }))
+            {
+                events.extend(branch_event());
+            }
+            sink.push(events)
+        }) as glaude_claude::Sink
     };
     // mamadoo's launch bookkeeping; a restart of an ended session is not a new launch.
     let shared =
@@ -116,6 +146,9 @@ pub async fn conv_start(
         }
         other => return Err(format!("{other} conversations are not supported yet")),
     };
+    if let Some(ev) = branch_event() {
+        sink.push(vec![ev]);
+    }
     convs
         .0
         .lock()

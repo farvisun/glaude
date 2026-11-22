@@ -3,6 +3,7 @@ mod commands;
 mod conv;
 mod pty;
 mod sink;
+mod statusline;
 
 use tauri::Manager;
 use tracing_subscriber::EnvFilter;
@@ -48,6 +49,7 @@ pub fn run() {
             commands::sessions_list,
             commands::codex_sessions_list,
             commands::codex_models,
+            statusline::statusline_render,
             pty::pty_open,
             pty::pty_write,
             pty::pty_resize,
