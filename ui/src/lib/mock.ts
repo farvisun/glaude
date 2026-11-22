@@ -2,7 +2,7 @@
 // It plays a scripted Persian/English session so layout, bidi and streaming
 // can be checked without spawning real agents.
 import { MockChannel, type AppInfo } from "./ipc";
-import type { Block, ConvEvent, Item, QueuedMessage, TaskInfo } from "./types";
+import type { Block, ConvEvent, FileDiff, Item, QueuedMessage, TaskInfo } from "./types";
 import { detectDir } from "./bidi";
 
 type Chan = MockChannel<ConvEvent[]>;
@@ -432,7 +432,44 @@ function hostChannel(convId: string, ch: Chan): Chan {
 	return proxy;
 }
 
+async function demoPaths(ch: Chan, text: string) {
+	ch.push([{ type: "item", item: { kind: "user", id: "u" + Date.now(), blocks: [p(text)], attachments: [] } }]);
+	await sleep(200);
+	ch.push([
+		{
+			type: "item",
+			item: {
+				kind: "assistant",
+				id: "a" + Date.now(),
+				streaming: false,
+				blocks: [
+					{
+						html: '<p>The bug is in <code>src/main.rs:12</code>; the helpers live in <code>ui/src</code>. See <a href="docs/plan.md">the plan</a>. <code>nope/missing.ts</code> does not exist and <code>cargo test</code> is a command.</p>',
+						dir: "ltr",
+					},
+				],
+			},
+		},
+		{ type: "turnDone", durationMs: 200 },
+	]);
+}
+
+// Files the mock pretends exist under the demo project.
+const MOCK_ROOT = "/Users/demo/Projects/glaude";
+const mockFiles: Record<string, string> = {
+	"src/main.rs": Array.from({ length: 40 }, (_, i) => (i === 11 ? "    let x = parse(input)?; // line 12" : `// line ${i + 1}`)).join("\n"),
+	"docs/plan.md": "# Plan\n\nShip it.",
+};
+const mockDirs = new Set(["ui/src", "src", "docs"]);
+
+const mockDiffs = (): FileDiff[] => [
+	{ path: "src/main.rs", kind: "update", added: 2, removed: 1, diff: "@@ -10,4 +10,5 @@\n fn main() {\n-    let x = parse(input);\n+    let x = parse(input)?;\n+    run(x);\n }\n" },
+	{ path: "ui/src/app.css", kind: "add", added: 2, removed: 0, diff: "@@ -0,0 +1,2 @@\n+.path-link { cursor: pointer; }\n+.x {}\n" },
+];
+let mockDirty = 2;
+
 const demoScenarios: [RegExp, (ch: Chan, text: string) => Promise<void>][] = [
+	[/^demo paths/i, demoPaths],
 	[/^demo limit/i, demoLimit],
 	[/^demo agents/i, demoAgents],
 	[/^demo workflow/i, demoWorkflow],
@@ -587,6 +624,44 @@ export const mockBackend: Record<string, (args: Record<string, unknown>) => unkn
 	},
 	conv_interrupt: async () => null,
 	host_list: async () => [],
+	paths_check: async (args) =>
+		(args.candidates as string[]).map((c) => {
+			const m = /^(.*?)(?::(\d+))?(?::(\d+))?$/.exec(c.replace(/^file:\/\//, ""));
+			const rel = (m?.[1] ?? c).replace(/^\.\//, "").replace(/\/$/, "");
+			if (!(rel in mockFiles) && !mockDirs.has(rel)) return null;
+			return { abs: `${MOCK_ROOT}/${rel}`, dir: mockDirs.has(rel), line: m?.[2] ? Number(m[2]) : undefined, col: m?.[3] ? Number(m[3]) : undefined };
+		}),
+	open_path: async (args) => (String(args.path).endsWith(".app") ? "revealed" : String(args.how)),
+	editors_available: async () => ["vscode", "zed"],
+	read_text_file: async (args) => {
+		const rel = String(args.path).replace(MOCK_ROOT + "/", "");
+		const text = mockFiles[rel];
+		if (text === undefined) throw new Error("That file does not exist");
+		return { path: args.path, text, html: null, lines: text.split("\n").length, size: text.length, truncated: false, binary: false };
+	},
+	git_info: async (args) => {
+		if (!String(args.cwd).startsWith(MOCK_ROOT)) throw new Error("This folder is not in a git repository");
+		return { root: MOCK_ROOT, branch: "feature/links", base: "origin/main", upstream: "origin/feature/links", ahead: 1, behind: 0, dirty: mockDirty, hasCommits: true, worktree: false, managed: false, gh: true };
+	},
+	git_diff: async (args) => (args.source === "uncommitted" ? (mockDirty ? mockDiffs() : []) : mockDiffs().slice(0, 1)),
+	git_log: async () => [
+		{ sha: "a1b2c3d4", short: "a1b2c3d", subject: "feat: clickable paths", author: "Demo", date: new Date(Date.now() - 3600e3).toISOString() },
+		{ sha: "e5f6a7b8", short: "e5f6a7b", subject: "fix: queue drains after a limit", author: "Demo", date: new Date(Date.now() - 86400e3).toISOString() },
+	],
+	git_commit: async () => {
+		mockDirty = 0;
+		return "9f8e7d6";
+	},
+	git_push: async () => "To origin: feature/links",
+	git_pr_status: async () => null,
+	git_pr_create: async () => "https://example.com/pr/1",
+	git_message: async (args) => {
+		await sleep(300);
+		return args.pr ? "Clickable paths in replies\n\n- Paths open in the editor" : "feat: open paths from replies";
+	},
+	project_config: async () => ({ actions: [{ name: "Dev", command: "bun run dev" }, { name: "Test", command: "bun test" }] }),
+	worktree_add: async (args) => ({ path: `${MOCK_ROOT}-wt/${args.name}`, branch: `glaude/${args.name}`, setup: null }),
+	worktree_remove: async () => null,
 	conv_attach: async () => {
 		throw new Error("not running");
 	},
