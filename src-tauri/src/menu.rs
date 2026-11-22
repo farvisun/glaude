@@ -73,7 +73,7 @@ pub fn on_menu<R: Runtime>(app: &AppHandle<R>, id: &str) {
         }
         _ => {
             // From the status icon the window may be hidden.
-            if id.starts_with("open-conv:") || id == "new-conversation" {
+            if id.starts_with("open-conv:") || id == "new-conversation" || id == "agents" {
                 show_main(app);
             }
             let _ = app.emit("menu", id);
@@ -134,6 +134,7 @@ pub fn app_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         .paste()
         .select_all()
         .separator()
+        .item(&item("find", "Find in Conversation…", Some("CmdOrCtrl+F"))?)
         .item(&item("search", "Search History…", Some("CmdOrCtrl+K"))?)
         .build()?;
     let theme = SubmenuBuilder::new(app, "Appearance")
@@ -142,6 +143,12 @@ pub fn app_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         .item(&item("theme-dark", "Dark", None)?)
         .build()?;
     let view = SubmenuBuilder::new(app, "View")
+        .item(&item(
+            "palette",
+            "Command Palette…",
+            Some("CmdOrCtrl+Shift+P"),
+        )?)
+        .separator()
         .item(&item(
             "toggle-sidebar",
             "Toggle Sidebar",
@@ -168,6 +175,11 @@ pub fn app_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         .build()?;
     let conversation = SubmenuBuilder::new(app, "Conversation")
         .item(&item("changes", "Changes…", Some("CmdOrCtrl+Shift+G"))?)
+        .item(&item(
+            "review",
+            "Ask the Other Tool to Review Changes",
+            Some("CmdOrCtrl+Shift+R"),
+        )?)
         .item(&item("side-chat", "Side Chat", None)?)
         .item(&item(
             "session-details",
@@ -187,6 +199,14 @@ pub fn app_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     let window = SubmenuBuilder::new(app, "Window")
         .minimize()
         .maximize()
+        .separator()
+        .item(&item("agents", "Agents Board", Some("Alt+CmdOrCtrl+A"))?)
+        .item(&item(
+            "next-waiting",
+            "Next Agent Waiting for You",
+            Some("CmdOrCtrl+Shift+A"),
+        )?)
+        .item(&item("usage", "Usage", None)?)
         .separator()
         .item(&item("next-tab", "Show Next Tab", Some("Ctrl+Tab"))?)
         .item(&item(
@@ -213,6 +233,9 @@ pub struct TrayConv {
     pub title: String,
     /// working | waiting | unread | idle
     pub state: String,
+    /// What it is doing now ("Editing App.svelte", "Allow Bash?").
+    #[serde(default)]
+    pub step: Option<String>,
 }
 
 fn tray_menu<R: Runtime>(app: &AppHandle<R>, convs: &[TrayConv]) -> tauri::Result<Menu<R>> {
@@ -250,9 +273,12 @@ fn tray_menu<R: Runtime>(app: &AppHandle<R>, convs: &[TrayConv]) -> tauri::Resul
             "unread" => "✓ ",
             _ => "    ",
         };
-        let mut title: String = c.title.chars().take(48).collect();
-        if c.title.chars().count() > 48 {
+        let mut title: String = c.title.chars().take(40).collect();
+        if c.title.chars().count() > 40 {
             title.push('…');
+        }
+        if let Some(step) = c.step.as_deref().filter(|s| !s.is_empty()) {
+            title = format!("{title}  —  {step}");
         }
         b = b.item(
             &MenuItemBuilder::with_id(format!("open-conv:{}", c.id), format!("{mark}{title}"))
@@ -261,6 +287,7 @@ fn tray_menu<R: Runtime>(app: &AppHandle<R>, convs: &[TrayConv]) -> tauri::Resul
     }
     b.separator()
         .item(&MenuItemBuilder::with_id("new-conversation", "New Conversation…").build(app)?)
+        .item(&MenuItemBuilder::with_id("agents", "Agents Board").build(app)?)
         .item(&MenuItemBuilder::with_id("show", "Show Glaude").build(app)?)
         .separator()
         .item(&MenuItemBuilder::with_id("quit", "Quit Glaude").build(app)?)

@@ -16,6 +16,7 @@
 	import { ui } from "$lib/state/ui.svelte";
 	import { history } from "$lib/state/history.svelte";
 	import SessionList from "./SessionList.svelte";
+	import LiveAgents from "./LiveAgents.svelte";
 	import { onMount } from "svelte";
 
 	let { onCollapse }: { onCollapse: () => void } = $props();
@@ -61,8 +62,9 @@
 	</div>
 
 	<div class="scrollbar-thin min-h-0 flex-1 overflow-y-auto px-2">
-		<section class="py-2">
-			<h2 class="text-muted-foreground px-1 pb-1 text-xs font-medium">Sessions</h2>
+		<LiveAgents />
+		<section class="pb-2">
+			<h2 class="text-muted-foreground flex h-6 items-center px-1 text-[11px] font-semibold tracking-wide uppercase">Projects</h2>
 			<SessionList />
 		</section>
 	</div>

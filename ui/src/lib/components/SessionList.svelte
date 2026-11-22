@@ -15,6 +15,7 @@
 	import Archive from "@lucide/svelte/icons/archive";
 	import ArchiveRestore from "@lucide/svelte/icons/archive-restore";
 	import { ui } from "$lib/state/ui.svelte";
+	import { stepOf } from "$lib/state/activity";
 
 	const SHOW = 6;
 	let expanded = $state<Record<string, boolean>>({});
@@ -22,6 +23,19 @@
 	let showArchived = $state(false);
 
 	const openConv = (s: SessionSummary) => openSession(s);
+
+	// Open agents per project folder that are working or need you.
+	const liveByCwd = $derived.by(() => {
+		const out: Record<string, { n: number; waiting: boolean }> = {};
+		for (const c of Object.values(conversations.byId)) {
+			const tone = stepOf(c).tone;
+			if (tone !== "working" && tone !== "waiting") continue;
+			const e = (out[c.cwd] ??= { n: 0, waiting: false });
+			e.n++;
+			e.waiting ||= tone === "waiting";
+		}
+		return out;
+	});
 
 	const running = $derived.by(() => {
 		const ids = new Set<string>();
@@ -137,6 +151,16 @@
 					<button class="flex min-w-0 flex-1 items-center gap-1 ps-1 text-start text-[13px] font-medium" onclick={() => history.toggle(g.cwd)} title={g.cwd}>
 						<ChevronRight class="text-muted-foreground size-3.5 shrink-0 transition-transform {closed ? '' : 'rotate-90'}" />
 						<span class="truncate">{g.name}</span>
+							{#if liveByCwd[g.cwd]}
+								{@const live = liveByCwd[g.cwd]}
+								<span
+									class="ms-1 inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 text-[11px] font-normal {live.waiting
+										? 'bg-attention/15 text-attention'
+										: 'bg-primary/10 text-primary'}"
+									title="{live.n} {live.n === 1 ? 'agent' : 'agents'} {live.waiting ? 'need you' : 'working'}"
+									><span class="size-1.5 rounded-full {live.waiting ? 'bg-attention' : 'bg-primary'}"></span>{live.n}</span
+								>
+							{/if}
 					</button>
 					<button
 						class="hover:bg-sidebar-accent text-muted-foreground grid size-5 shrink-0 place-items-center rounded opacity-0 group-hover/proj:opacity-100"

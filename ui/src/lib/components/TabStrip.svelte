@@ -13,12 +13,15 @@
 	import FileText from "@lucide/svelte/icons/file-text";
 	import GitCompare from "@lucide/svelte/icons/git-compare";
 	import ChevronDown from "@lucide/svelte/icons/chevron-down";
+	import LayoutDashboard from "@lucide/svelte/icons/layout-dashboard";
+	import ChartColumn from "@lucide/svelte/icons/chart-column";
 	import { tick } from "svelte";
 	import { layout, MAX_PANES, type Leaf, type TabKind } from "$lib/state/layout.svelte";
 	import { drag } from "$lib/state/drag.svelte";
 	import { ui } from "$lib/state/ui.svelte";
 	import { isMac } from "$lib/state/prefs.svelte";
 	import { tabBadge } from "$lib/state/badges.svelte";
+	import { stepOf } from "$lib/state/activity";
 	import { conversations } from "$lib/state/conversations.svelte";
 	import Spark from "$lib/components/conv/Spark.svelte";
 	import PaneMenu from "./PaneMenu.svelte";
@@ -35,6 +38,8 @@
 		search: Sparkles,
 		file: FileText,
 		changes: GitCompare,
+		agents: LayoutDashboard,
+		usage: ChartColumn,
 	};
 
 	let dropIndex = $state<number | null>(null);
@@ -100,7 +105,10 @@
 		const tab = layout.tabs[tabId];
 		if (!tab) return "";
 		const conv = tab.ref ? conversations.byId[tab.ref] : undefined;
-		if (conv) return `${tab.title}\n${conv.provider === "codex" ? "Codex" : "Claude"} · ${conv.cwd}`;
+		if (conv) {
+			const step = stepOf(conv);
+			return `${tab.title}\n${conv.provider === "codex" ? "Codex" : "Claude"} · ${conv.cwd}${step.tone === "idle" ? "" : `\n${step.text}`}`;
+		}
 		return tab.kind === "file" || tab.kind === "changes" ? `${tab.title}\n${tab.ref}` : tab.title;
 	}
 	const badgeLabel = { running: "Working", attention: "Needs you", unread: "Finished" } as const;

@@ -38,6 +38,12 @@ export function notifyTurnDone(conv: Conversation, error?: string) {
 	void send(label(conv), error ? `Stopped with an error: ${error.slice(0, 120)}` : "Finished. Your turn.");
 }
 
+/** A reminder about an agent (stuck waiting, a long command). */
+export function notifyAlert(conv: Conversation, body: string) {
+	if (visible(conv)) return;
+	void send(label(conv), body);
+}
+
 export function notifyPermission(conv: Conversation, tool: string) {
 	updateBadge();
 	if (visible(conv) || !prefs.notifyWaiting) return;

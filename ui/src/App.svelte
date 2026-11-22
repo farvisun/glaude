@@ -7,11 +7,15 @@
 	import PaneView from "$lib/components/PaneView.svelte";
 	import NewConversationDialog from "$lib/components/NewConversationDialog.svelte";
 	import SearchPalette from "$lib/components/SearchPalette.svelte";
+	import CommandPalette from "$lib/components/CommandPalette.svelte";
+	import PromptEditor from "$lib/components/PromptEditor.svelte";
+	import PromptFill from "$lib/components/PromptFill.svelte";
 	import TaskOutputDialog from "$lib/components/conv/TaskOutputDialog.svelte";
 	import RewindDialog from "$lib/components/conv/RewindDialog.svelte";
 	import SessionPanel from "$lib/components/conv/SessionPanel.svelte";
 	import PathMenu from "$lib/components/PathMenu.svelte";
 	import { convActions, hostLost, restoreConversations, startIdleReaper } from "$lib/state/sessions";
+	import { startAlerts } from "$lib/state/alerts";
 	import { call, inTauri } from "$lib/ipc";
 	import { dispose as disposeTerminal, retheme, reconfigure as reconfigureTerminals } from "$lib/state/terminals";
 	import { layout } from "$lib/state/layout.svelte";
@@ -23,6 +27,7 @@
 	let sidebarPane = $state<Pane>();
 
 	startIdleReaper();
+	startAlerts();
 	void restoreConversations();
 	if (inTauri)
 		import("@tauri-apps/api/event").then(({ listen }) => {
@@ -116,6 +121,9 @@
 <Toaster position="bottom-right" richColors closeButton />
 <NewConversationDialog />
 <SearchPalette />
+<CommandPalette />
+<PromptEditor />
+<PromptFill />
 <TaskOutputDialog />
 <RewindDialog />
 <SessionPanel />

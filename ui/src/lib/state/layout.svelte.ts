@@ -2,7 +2,7 @@
 // leaf has its own tab strip. Persisted to localStorage so the window comes
 // back the way it was left.
 
-export type TabKind = "welcome" | "conversation" | "terminal" | "accounts" | "settings" | "search" | "file" | "changes";
+export type TabKind = "welcome" | "conversation" | "terminal" | "accounts" | "settings" | "search" | "file" | "changes" | "agents" | "usage";
 
 /** What a terminal tab runs: a login shell, or a CLI's own TUI. */
 export interface TermSpec {
