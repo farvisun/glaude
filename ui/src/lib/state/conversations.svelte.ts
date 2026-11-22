@@ -43,6 +43,10 @@ export class Conversation {
 	limitedUntil = $state<string | null>(null);
 	/** A "continue" is scheduled at this time. */
 	resumeAt = $state<string | null>(null);
+	/** The terminal drawer under the conversation is shown. */
+	drawer = $state(false);
+	/** Side chat: the conversation it was forked from. */
+	sideOf = $state<string | null>(null);
 	/** Text to quote into the composer (from a side chat). */
 	quote = $state<string | null>(null);
 	/** Restored tab: its history loads from the transcript when shown. */
