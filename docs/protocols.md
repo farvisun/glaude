@@ -80,6 +80,70 @@ CLI to host requests:
   - deny: `{"behavior":"deny","message":"…","interrupt":false}`
   - `control_cancel_request{request_id}` withdraws a pending prompt.
 
+### Tasks: subagents, background shells, monitors, workflows (2.1.329)
+
+Recorded in `fixtures/claude/{agents-background,workflow,task-stop}.ndjson`.
+
+- `system/task_started{task_id, tool_use_id, description, task_type, subagent_type?, is_backgrounded, workflow_name?, parent_task_id?}`.
+  `task_type`: `local_agent`, `local_bash`, `local_workflow`, `monitor*`, `mcp_task`, …
+- `system/task_progress{usage{total_tokens, tool_uses, duration_ms}, last_tool_name, description, summary?, workflow_progress?}`.
+  `summary` is an AI progress line when `initialize.agentProgressSummaries` is true.
+- `system/task_updated{patch{status, end_time, description, is_backgrounded, error}}`.
+- `system/task_notification{status: completed|failed|stopped, summary, summary_is_report?, output_file, usage?, workflow_progress?}`.
+  For a subagent with `summary_is_report` the summary is its final report.
+- `system/background_tasks_changed{tasks[]}` lists running background tasks.
+- Subagents now run in the background by default: the Agent tool result is
+  `{"isAsync": true, "status": "async_launched"}`; their messages still stream
+  with `parent_tool_use_id` = the Agent call, also after the main `result`.
+- When a background task ends, the CLI feeds the model a replayed user message
+  (`isReplay`, `origin.kind: "task-notification"`, text `<task-notification>…`)
+  and **starts a new turn by itself** (a second `result` without user input).
+  Transcripts store that text; Glaude turns it into a line and fills the
+  Agent call's output from `<result>`.
+- `workflow_progress[]` items: `{type: "workflow_phase", index, title}` and
+  `{type: "workflow_agent", index, label, state: start|progress|done|error,
+  phaseIndex, agentType, model, tokens, toolCalls, durationMs, lastToolName,
+  lastToolSummary, resultPreview, promptPreview, error}`.
+- Control: `get_task_output{task_id}` → `{output, total_bytes, truncated}`;
+  `stop_task{task_id}` → `{}` then `task_updated{status: killed}` and a
+  `task_notification{status: stopped}`.
+- `system/thinking_tokens{estimated_tokens}` during thinking.
+- `command_lifecycle{command_uuid, state: queued|started|completed}` (ignored).
+
+### Questions and plans
+
+- `AskUserQuestion` arrives as `can_use_tool` (`requires_user_interaction: true`)
+  with `input.questions[{question, header, options[{label, description, preview?}], multiSelect}]`.
+  Answer `allow` with `updatedInput = input + {"answers": {question: label}}`;
+  several labels for a multi-select are joined with ", ".
+- `ExitPlanMode` arrives as `can_use_tool` with `input{plan, planFilePath}`.
+  Approve with `allow` plus `updatedPermissions: [{"type": "setMode", "mode":
+  "acceptEdits"|"default", "destination": "session"}]`; `deny` with a message
+  keeps planning with that feedback. `system/status{permissionMode}` follows.
+
+### Rewind, agents, panels
+
+- File checkpoints need `CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING=1` in the
+  CLI environment. `rewind_files{user_message_id, dry_run?}` → dry run
+  `{canRewind, filesChanged[], insertions, deletions}`, then `{canRewind}`.
+  `user_message_id` is the uuid Glaude sends with the user message.
+- Conversation rewind: restart with `--resume <sid> --resume-session-at
+  <parentUuid of the user message> --fork-session` (parentUuid read from the
+  transcript); a first message has no parent: start fresh.
+- `initialize` reply: `agents[{name, description, model}]`,
+  `available_output_styles[]`, `output_style`. `--agent <name>` runs the main
+  thread as that agent; `@agent-<name>` in a prompt becomes an agent mention.
+- `apply_flag_settings{settings:{outputStyle}}` changes the output style.
+- Panels: `get_context_usage` (categories, memoryFiles, mcpTools, agents),
+  `mcp_status` (servers with status, tools, config), `mcp_reconnect{serverName}`,
+  `mcp_toggle{serverName, enabled}`, `get_skills_dialog` (name, source, tokens,
+  state), `get_hooks_listing` (events, hooks with source and command),
+  `get_memory_dialog` (memory files and folders).
+- `--include-hook-events` adds `hook_started` / `hook_response{hook_name,
+  hook_event, output, stdout, stderr, exit_code, outcome}`. Glaude passes it
+  and keeps the last 200 runs for the Hooks panel (with many hooks this is
+  over a hundred small events per turn).
+
 ### Attachments
 
 - Images go inline as base64 `image` content blocks.
