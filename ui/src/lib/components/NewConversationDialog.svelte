@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from "svelte";
 	import * as Dialog from "$lib/components/ui/dialog";
 	import * as Select from "$lib/components/ui/select";
 	import { Button } from "$lib/components/ui/button";
@@ -77,6 +78,12 @@
 	$effect(() => {
 		if (!ui.newConversationOpen) return;
 		if (ui.newConversationCwd) cwd = ui.newConversationCwd;
+		const preset = ui.newConversationPreset;
+		if (preset)
+			untrack(() => {
+				switchProvider(preset.provider);
+				account = preset.account;
+			});
 		call<AccountOption[]>("accounts_brief")
 			.then((list) => (accounts = list))
 			.catch(() => (accounts = []));

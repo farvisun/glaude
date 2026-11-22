@@ -58,7 +58,8 @@ function onBatch(conv: Conversation, batch: ConvEvent[]) {
 		conv.apply(ev);
 		if (ev.type === "notice") {
 			if (ev.level === "error") showError(conv.provider === "claude" ? "Claude stopped" : "Codex stopped", ev.text);
-			else toast.warning(ev.text);
+			else if (ev.level === "warning") toast.warning(ev.text);
+			else toast(ev.text);
 		} else if (ev.type === "turnDone") {
 			if (ev.error) showError("The turn ended with an error", ev.error);
 			history.refreshSoon();

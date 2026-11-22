@@ -9,8 +9,12 @@ class UiState {
 	searchOpen = $state(false);
 	sessionsLoading = $state(false);
 
-	openNewConversation(cwd?: string) {
+	/** Tool and account to preselect (from the Accounts page). */
+	newConversationPreset = $state<{ provider: "claude" | "codex"; account: string } | null>(null);
+
+	openNewConversation(cwd?: string, preset?: { provider: "claude" | "codex"; account: string }) {
 		this.newConversationCwd = cwd ?? null;
+		this.newConversationPreset = preset ?? null;
 		this.newConversationOpen = true;
 	}
 

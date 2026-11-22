@@ -9,6 +9,57 @@ type Chan = MockChannel<ConvEvent[]>;
 const chans = new Map<string, Chan>();
 const ptys = new Map<string, { send: (t: string) => void; line: string }>();
 
+function mockAccount(provider: "claude" | "codex", name: string, extra: Record<string, unknown>): Record<string, unknown> {
+	const iso = (msAgo: number) => new Date(Date.now() - msAgo).toISOString();
+	return {
+		provider,
+		name,
+		path: provider === "claude" ? (name === "default" ? "~/.claude" : `~/.claude_multi/${name}`) : name === "default" ? "~/.codex" : `~/.codex_${name}`,
+		archived: false,
+		protected: name === "default",
+		active: false,
+		running: false,
+		email: "",
+		org: "",
+		plan: "",
+		fiveHour: null,
+		week: null,
+		limitsAsOf: "",
+		tokens: 0,
+		tokensToday: 0,
+		tokens7d: 0,
+		sessions: 0,
+		launches: 0,
+		lastUsed: null,
+		createdAt: iso(40 * 86400e3),
+		usageUpdated: null,
+		sharedLinked: name === "default" ? 27 : 0,
+		sharedPending: 0,
+		sharedTotal: provider === "claude" ? 27 : 21,
+		details: [],
+		...extra,
+	};
+}
+
+const mockAccounts = [
+	mockAccount("claude", "default", {
+		active: true, running: true, email: "me@example.com", plan: "max 20x", tokens: 1_497_993_411, tokensToday: 12_400_000, tokens7d: 310_000_000, sessions: 412, launches: 230,
+		fiveHour: { used: 42, resetsAt: new Date(Date.now() + 2.5 * 3600e3).toISOString() }, week: { used: 63.5, resetsAt: new Date(Date.now() + 3 * 86400e3).toISOString() },
+		limitsAsOf: new Date(Date.now() - 600e3).toISOString(), lastUsed: new Date(Date.now() - 120e3).toISOString(),
+		details: [{ label: "usage", text: "in 2.1M · out 8.4M · cache read 1.4B · cache write 61.2M · 98.1K msgs · 412 sessions" }, { label: "models", text: "opus-5-5 71% · sonnet-5-5 22% · haiku-5-5 7%" }],
+	}),
+	mockAccount("claude", "work_example.com", {
+		email: "work@example.com", plan: "team 5x", tokens: 427_623_882, tokens7d: 25_747_887, sessions: 31, launches: 18, sharedLinked: 27,
+		fiveHour: { used: 91, resetsAt: new Date(Date.now() + 40 * 60e3).toISOString() }, week: { used: 12 }, lastUsed: new Date(Date.now() - 2 * 86400e3).toISOString(),
+	}),
+	mockAccount("claude", "old_trial", { archived: true, email: "trial@example.com", plan: "pro", sharedPending: 4 }),
+	mockAccount("codex", "default", {
+		active: true, email: "me@example.com", plan: "prolite", tokens: 34_743_027_618, tokens7d: 339_413_329, sessions: 4070, launches: 77,
+		week: { used: 21, resetsAt: new Date(Date.now() + 2.7 * 86400e3).toISOString() }, lastUsed: new Date(Date.now() - 3600e3).toISOString(),
+	}),
+	mockAccount("codex", "varahome", { email: "(api key)", plan: "", sharedLinked: 21 }),
+];
+
 function esc(s: string) {
 	return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
@@ -257,6 +308,27 @@ export const mockBackend: Record<string, (args: Record<string, unknown>) => unkn
 	codex_sessions_list: async () => [
 		{ provider: "codex", id: "s2", cwd: "/Users/demo/Projects/glaude", title: "Add terminal tabs with portable-pty", updated: Date.now() - 3 * 3600e3 },
 	],
+	accounts_list: async () => mockAccounts.map((a) => ({ ...a })),
+	accounts_refresh: async (args) => {
+		const ch = args.onProgress as MockChannel<number>;
+		for (const f of [0.3, 0.7, 1]) {
+			await sleep(150);
+			ch.push(f);
+		}
+		const a = mockAccounts.find((x) => x.provider === args.provider && x.name === args.name)!;
+		a.usageUpdated = new Date().toISOString();
+		return { ...a };
+	},
+	accounts_pref: async (args) => (args.value as string | null) ?? "name",
+	accounts_share: async (args) => (args.dryRun ? ["would link projects", "would link settings.json"] : ["linked projects", "linked settings.json"]),
+	accounts_create: async (args) => {
+		mockAccounts.push(mockAccount(args.provider as "claude" | "codex", String(args.name).trim().replace(/\s+/g, "_"), {}));
+		return String(args.name).trim().replace(/\s+/g, "_");
+	},
+	accounts_rename: async () => {},
+	accounts_delete: async () => {},
+	accounts_archive: async () => {},
+	accounts_set_active: async () => {},
 	accounts_brief: async () => [
 		{ provider: "claude", name: "default", email: "me@example.com", active: true, archived: false },
 		{ provider: "claude", name: "work", email: "work@example.com", active: false, archived: false },

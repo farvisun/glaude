@@ -18,5 +18,5 @@
 {:else if tab.kind === "terminal"}
 	<TerminalTab {tab} {active} />
 {:else if tab.kind === "accounts"}
-	<AccountsTab />
+	<AccountsTab {active} />
 {/if}
