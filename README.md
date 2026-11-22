@@ -99,6 +99,17 @@ Bundles land in `target/release/bundle/` (`.app` and `.dmg` on macOS,
 `.deb` and `.AppImage` on Linux, `.msi` and `.exe` on Windows).
 `.github/workflows/ci.yml` builds all three platforms.
 
+To build and install on this Mac:
+
+```sh
+scripts/install-macos.sh             # build, then install to /Applications
+scripts/install-macos.sh --no-build  # install the last build
+```
+
+The script moves the bundle out of `target/` (a copy left there would show
+up as a second Glaude in Spotlight), signs it ad hoc and registers it with
+Launch Services. Quit Glaude first.
+
 ## Layout
 
 ```
