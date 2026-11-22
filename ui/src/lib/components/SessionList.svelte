@@ -1,7 +1,20 @@
 <script lang="ts">
 	import { history, type SessionSummary } from "$lib/state/history.svelte";
 	import { conversations } from "$lib/state/conversations.svelte";
-	import { openSession } from "$lib/state/sessions";
+	import { openSession, openSessionSplit, resumeInTerminal, showError } from "$lib/state/sessions";
+	import * as ContextMenu from "$lib/components/ui/context-menu";
+	import { call } from "$lib/ipc";
+	import { prefs, isMac } from "$lib/state/prefs.svelte";
+	import { basename } from "$lib/format";
+	import Columns2 from "@lucide/svelte/icons/columns-2";
+	import Rows2 from "@lucide/svelte/icons/rows-2";
+	import MessageSquare from "@lucide/svelte/icons/message-square";
+	import MessageSquarePlus from "@lucide/svelte/icons/message-square-plus";
+	import Pencil from "@lucide/svelte/icons/pencil";
+	import Copy from "@lucide/svelte/icons/copy";
+	import FolderOpen from "@lucide/svelte/icons/folder-open";
+	import SquareTerminal from "@lucide/svelte/icons/square-terminal";
+	import GitCompare from "@lucide/svelte/icons/git-compare";
 	import { triage, sessionKey, snoozeOptions } from "$lib/state/triage.svelte";
 	import { fmtAgo, fmtUntil } from "$lib/format";
 	import { toast } from "svelte-sonner";
@@ -65,11 +78,31 @@
 	const archive = (s: SessionSummary) => withUndo(s, "Archived", () => triage.archive(sessionKey(s)));
 	const snooze = (s: SessionSummary, until: number, label: string) =>
 		withUndo(s, `Snoozed until ${label.toLowerCase()}`, () => triage.snooze(sessionKey(s), until));
+
+	async function copyId(s: SessionSummary) {
+		try {
+			await navigator.clipboard.writeText(s.id);
+			toast("Session ID copied", { description: s.id });
+		} catch (e) {
+			showError("Could not copy", e);
+		}
+	}
+	async function reveal(s: SessionSummary) {
+		if (!s.path) return;
+		try {
+			await call("open_path", { path: s.path, how: "reveal", editor: prefs.editor, line: null, col: null });
+		} catch (e) {
+			showError("Could not show the transcript", e);
+		}
+	}
 </script>
 
 {#snippet row(s: SessionSummary, extra?: "snoozed" | "archived")}
 	{@const k = sessionKey(s)}
-	<li class="group/row relative">
+	<ContextMenu.Root>
+	<ContextMenu.Trigger>
+	{#snippet child({ props })}
+	<li {...props} class="group/row relative outline-none">
 		<button
 			class="hover:bg-sidebar-accent flex h-8 w-full min-w-0 items-center gap-2 rounded-md ps-5 pe-2 text-start text-[13px]"
 			onclick={() => openConv(s)}
@@ -123,6 +156,46 @@
 			{/if}
 		</span>
 	</li>
+	{/snippet}
+	</ContextMenu.Trigger>
+	<ContextMenu.Content class="w-60">
+		<ContextMenu.Item onclick={() => openConv(s)}><MessageSquare /> Open</ContextMenu.Item>
+		<ContextMenu.Item onclick={() => openSessionSplit(s, "right")}><Columns2 /> Open in split right</ContextMenu.Item>
+		<ContextMenu.Item onclick={() => openSessionSplit(s, "bottom")}><Rows2 /> Open in split down</ContextMenu.Item>
+		<ContextMenu.Item onclick={() => ui.openNewConversation(s.cwd)}
+			><MessageSquarePlus /> <span class="truncate">New conversation in {basename(s.cwd) || "this folder"}</span></ContextMenu.Item
+		>
+		<ContextMenu.Separator />
+		{#if extra === "archived"}
+			<ContextMenu.Item onclick={() => triage.unarchive(k)}><ArchiveRestore /> Unarchive</ContextMenu.Item>
+		{:else}
+			<ContextMenu.Item onclick={() => triage.togglePin(k)}
+				>{#if triage.isPinned(k)}<PinOff /> Unpin{:else}<Pin /> Pin to the top{/if}</ContextMenu.Item
+			>
+			{#if extra === "snoozed"}
+				<ContextMenu.Item onclick={() => triage.wake(k)}><AlarmClock /> Wake up now</ContextMenu.Item>
+			{:else}
+				<ContextMenu.Sub>
+					<ContextMenu.SubTrigger><AlarmClock /> Snooze</ContextMenu.SubTrigger>
+					<ContextMenu.SubContent>
+						{#each snoozeOptions(new Date(triage.now)) as o (o.label)}
+							<ContextMenu.Item onclick={() => snooze(s, o.until, o.label)}>{o.label}</ContextMenu.Item>
+						{/each}
+					</ContextMenu.SubContent>
+				</ContextMenu.Sub>
+			{/if}
+			<ContextMenu.Item onclick={() => archive(s)}><Archive /> Archive</ContextMenu.Item>
+		{/if}
+		<ContextMenu.Item onclick={() => (ui.renameSession = s)}><Pencil /> Rename…</ContextMenu.Item>
+		<ContextMenu.Separator />
+		<ContextMenu.Item onclick={() => copyId(s)}><Copy /> Copy session ID</ContextMenu.Item>
+		<ContextMenu.Item disabled={!s.path} onclick={() => reveal(s)}><FolderOpen /> {isMac ? "Reveal transcript in Finder" : "Show transcript file"}</ContextMenu.Item>
+		<ContextMenu.Item onclick={() => resumeInTerminal(s)}
+			><SquareTerminal /> Resume in {s.provider === "claude" ? "Claude" : "Codex"} terminal UI</ContextMenu.Item
+		>
+		<ContextMenu.Item onclick={() => ui.openChanges(s.cwd)}><GitCompare /> Open Changes</ContextMenu.Item>
+	</ContextMenu.Content>
+	</ContextMenu.Root>
 {/snippet}
 
 {#if history.loading}
