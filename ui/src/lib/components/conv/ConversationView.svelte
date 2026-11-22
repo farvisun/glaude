@@ -7,6 +7,7 @@
 	import Composer from "./Composer.svelte";
 	import StatusLine from "./StatusLine.svelte";
 	import ProgressPanel from "./ProgressPanel.svelte";
+	import { slide } from "$lib/motion";
 	import TurnIndicator from "./TurnIndicator.svelte";
 	import { tick } from "svelte";
 	import { call } from "$lib/ipc";
@@ -641,7 +642,7 @@
 			/>
 		</div>
 		{#if prefs.progressPanel}
-			<div class="hidden w-64 shrink-0 @3xl:block">
+			<div class="hidden w-64 shrink-0 @3xl:block" transition:slide={{ axis: "x", duration: 200 }}>
 				<ProgressPanel {conv} />
 			</div>
 		{/if}

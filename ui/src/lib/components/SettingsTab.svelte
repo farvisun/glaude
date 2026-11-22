@@ -31,13 +31,14 @@
 	import Bookmark from "@lucide/svelte/icons/bookmark";
 	import Globe from "@lucide/svelte/icons/globe";
 	import NetworkSection from "./settings/NetworkSection.svelte";
+	import SortMenu from "./SortMenu.svelte";
 	import Pencil from "@lucide/svelte/icons/pencil";
 	import Trash from "@lucide/svelte/icons/trash-2";
 	import { prompts, slugOf } from "$lib/state/prompts.svelte";
 	import { basename } from "$lib/format";
 
 	const sections = [
-		{ id: "appearance", title: "Appearance", icon: Palette_, keys: ["uiScale", "density", "codeFont", "codeFontCustom", "messageWidth"] },
+		{ id: "appearance", title: "Appearance", icon: Palette_, keys: ["uiScale", "density", "motion", "codeFont", "codeFontCustom", "messageWidth"] },
 		{ id: "new", title: "New conversations", icon: MessageSquarePlus, keys: ["sendKey"] },
 		{ id: "conversations", title: "Conversations", icon: MessagesSquare, keys: ["statuslineScript", "progressPanel", "compactTools", "editor"] },
 		{ id: "background", title: "Background & alerts", icon: BellRing, keys: ["keepAgents", "idleMinutes", "notifyDone", "notifyWaiting", "notifyErrors", "notifyClosed", "notifySound", "alertWaitMinutes", "alertLongMinutes"] },
@@ -73,6 +74,7 @@
 	const current = $derived(sections.find((s) => s.id === active) ?? sections[0]);
 
 	const palettes: { id: Palette; name: string; note: string; swatch: string[] }[] = [
+		{ id: "sade", name: "Sade", note: "Plain neutrals with a black and white accent", swatch: ["#0b0c0f", "#f1f2f5", "#7aa7ff", "#9a9ca8"] },
 		{ id: "lajevard", name: "Lajevard", note: "Lapis ink with a turquoise accent", swatch: ["#101a2e", "#5cc8bd", "#f2b544", "#e4eaf4"] },
 		{ id: "dood", name: "Dood", note: "Quiet graphite with an indigo accent", swatch: ["#18181b", "#9aa4ff", "#f5b041", "#e7e7ea"] },
 	];
@@ -146,6 +148,11 @@
 	];
 
 	const resetSection = (keys: readonly string[]) => prefs.reset(keys as (keyof Prefs)[]);
+
+	let promptSort = $state<"name" | "recent">((localStorage.getItem("glaude.prompts.sort") as "name" | "recent") || "name");
+	const sortedPrompts = $derived(
+		[...prompts.list].sort((a, b) => (promptSort === "recent" ? b.updated - a.updated : a.name.localeCompare(b.name, undefined, { sensitivity: "base" }))),
+	);
 </script>
 
 {#snippet nav()}
@@ -248,6 +255,13 @@
 							]}
 							onChange={(v) => prefs.set("density", v)}
 						/>
+					</SettingRow>
+					<SettingRow
+						label="Animations"
+						description="Panels, tabs, menus and dialogs move into place. Off as well when the system asks for reduced motion."
+						keywords="motion transition animation reduce"
+					>
+						<Switch checked={prefs.motion} onCheckedChange={(v) => prefs.set("motion", v)} aria-label="Animations" />
 					</SettingRow>
 					<SettingRow label="Message width" description="How wide conversations are on large screens." keywords="column">
 						<Segmented
@@ -468,7 +482,20 @@
 				<section class="settings-section">
 					<div class="flex items-center gap-2 pt-1 pb-1">
 						<h2 class="text-[15px] font-semibold">Saved prompts</h2>
-						<Button variant="outline" size="sm" class="ms-auto h-7" onclick={() => (ui.promptEdit = "new")}><Plus /> New prompt</Button>
+						<span class="ms-auto">
+							<SortMenu
+								value={promptSort}
+								options={[
+									{ value: "name", label: "Name" },
+									{ value: "recent", label: "Recently edited" },
+								]}
+								onChange={(v) => {
+									promptSort = v;
+									localStorage.setItem("glaude.prompts.sort", v);
+								}}
+							/>
+						</span>
+						<Button variant="outline" size="sm" class="h-7" onclick={() => (ui.promptEdit = "new")}><Plus /> New prompt</Button>
 					</div>
 					<SettingRow
 						label="Use them anywhere"
@@ -478,7 +505,7 @@
 					>
 						{#if prompts.list.length}
 							<ul class="border-border divide-border divide-y rounded-md border">
-								{#each prompts.list as p (p.id)}
+								{#each sortedPrompts as p (p.id)}
 									<li class="flex items-center gap-3 px-3 py-2">
 										<div class="min-w-0 flex-1">
 											<div class="flex items-baseline gap-2">

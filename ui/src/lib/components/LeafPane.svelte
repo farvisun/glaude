@@ -70,7 +70,7 @@
 		{#each pane.tabs as tabId (tabId)}
 			{@const tab = layout.tabs[tabId]}
 			{#if tab && (tab.kind === "terminal" || tabId === pane.active)}
-				<div class="absolute inset-0 {tabId === pane.active ? '' : 'invisible'}">
+				<div class="absolute inset-0 {tabId === pane.active ? 'motion-fade' : 'invisible'}">
 					<TabBody {tab} active={tabId === pane.active} />
 				</div>
 			{/if}

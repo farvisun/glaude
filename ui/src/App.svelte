@@ -15,10 +15,12 @@
 	import SessionPanel from "$lib/components/conv/SessionPanel.svelte";
 	import PathMenu from "$lib/components/PathMenu.svelte";
 	import ProxyEditor from "$lib/components/ProxyEditor.svelte";
+	import ProjectEditor from "$lib/components/ProjectEditor.svelte";
 	import SessionRename from "$lib/components/SessionRename.svelte";
 	import TerminalPanel from "$lib/components/TerminalPanel.svelte";
 	import { termPanel } from "$lib/state/termpanel.svelte";
 	import { proxies } from "$lib/state/proxies.svelte";
+	import { motionOn, slide } from "$lib/motion";
 	import { convActions, hostLost, restoreConversations, startIdleReaper } from "$lib/state/sessions";
 	import { startAlerts } from "$lib/state/alerts";
 	import { call, inTauri } from "$lib/ipc";
@@ -59,6 +61,7 @@
 	$effect(() => {
 		const root = document.documentElement;
 		root.dataset.density = prefs.density;
+		root.dataset.motion = prefs.motion ? "on" : "off";
 		root.style.setProperty("--code-font", prefs.fontStack(prefs.codeFont, prefs.codeFontCustom));
 		root.style.setProperty("--msg-w", widths[prefs.messageWidth]);
 	});
@@ -103,10 +106,21 @@
 		}
 	});
 
-	ui.toggleSidebar = () => {
-		if (layout.sidebar.collapsed) sidebarPane?.expand();
-		else sidebarPane?.collapse();
-	};
+	// The sidebar slides when shown or hidden with a button or shortcut
+	// (not while its edge is dragged).
+	let paneAnim = $state(false);
+	let paneAnimTimer: ReturnType<typeof setTimeout> | undefined;
+	function animated(run: () => void) {
+		if (motionOn()) {
+			paneAnim = true;
+			clearTimeout(paneAnimTimer);
+			paneAnimTimer = setTimeout(() => (paneAnim = false), 320);
+		}
+		run();
+	}
+	const collapseSidebar = () => animated(() => sidebarPane?.collapse());
+	const expandSidebar = () => animated(() => sidebarPane?.expand());
+	ui.toggleSidebar = () => (layout.sidebar.collapsed ? expandSidebar() : collapseSidebar());
 	startCommands();
 
 	// New terminals in the panel start in the focused conversation's folder,
@@ -177,11 +191,12 @@
 <SessionPanel />
 <PathMenu />
 <ProxyEditor />
+<ProjectEditor />
 <SessionRename />
 
 <Tooltip.Provider delayDuration={400}>
 	<div class="h-full w-full">
-		<Resizable.PaneGroup direction="horizontal">
+		<Resizable.PaneGroup direction="horizontal" class={paneAnim ? "pane-anim" : ""}>
 			<Resizable.Pane
 				bind:this={sidebarPane}
 				defaultSize={layout.sidebar.collapsed ? 0 : Math.max(layout.sidebar.size, sidebarMin)}
@@ -204,13 +219,13 @@
 					}
 				}}
 			>
-				<Sidebar onCollapse={() => sidebarPane?.collapse()} />
+				<Sidebar onCollapse={collapseSidebar} />
 			</Resizable.Pane>
 			<Resizable.Handle />
 			<Resizable.Pane defaultSize={100 - (layout.sidebar.collapsed ? 0 : layout.sidebar.size)}>
 				<main class="bg-background flex h-full min-w-0 flex-col" bind:this={mainEl}>
 					<div class="min-h-0 flex-1 {termPanel.open && termPanel.maximized ? 'hidden' : ''}">
-						<PaneView node={layout.root} sidebarCollapsed={layout.sidebar.collapsed} onExpandSidebar={() => sidebarPane?.expand()} />
+						<PaneView node={layout.root} sidebarCollapsed={layout.sidebar.collapsed} onExpandSidebar={expandSidebar} />
 					</div>
 					{#if termPanel.open}
 						{#if !termPanel.maximized}
@@ -232,7 +247,11 @@
 								></div>
 							</div>
 						{/if}
-						<div class="min-h-0 {termPanel.maximized ? 'flex-1' : 'shrink-0'}" style:height={termPanel.maximized ? undefined : `${termPanel.size}%`}>
+						<div
+							class="min-h-0 {termPanel.maximized ? 'flex-1' : 'shrink-0'}"
+							style:height={termPanel.maximized ? undefined : `${termPanel.size}%`}
+							transition:slide={{ duration: 200 }}
+						>
 							<TerminalPanel />
 						</div>
 					{/if}
