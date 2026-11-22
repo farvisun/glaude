@@ -182,6 +182,7 @@ pub async fn codex_sessions_list(
             cwd: t.cwd,
             title: t.title,
             updated: t.updated,
+            created: t.created,
             path: t.path,
         })
         .collect())

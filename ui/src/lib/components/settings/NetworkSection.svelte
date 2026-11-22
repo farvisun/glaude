@@ -11,6 +11,7 @@
 	import { history } from "$lib/state/history.svelte";
 	import { ui } from "$lib/state/ui.svelte";
 	import { basename } from "$lib/format";
+	import { projects } from "$lib/state/projects.svelte";
 	import { onMount } from "svelte";
 	import { toast } from "svelte-sonner";
 	import Plus from "@lucide/svelte/icons/plus";
@@ -145,7 +146,7 @@
 					<ul class="border-border divide-border divide-y rounded-md border">
 						{#each projectRules as [cwd, v] (cwd)}
 							<li class="flex items-center gap-3 px-3 py-1.5">
-								<span class="min-w-0 flex-1 truncate text-[13px]" title={cwd}>{basename(cwd)}</span>
+								<span class="min-w-0 flex-1 truncate text-[13px]" title={cwd}>{projects.of(cwd)?.name ?? basename(cwd)}</span>
 								<Choice label="Proxy for {basename(cwd)}" value={v} options={ruleOptions.slice(1)} onChange={(x) => setProject(cwd, x)} />
 								<Button variant="ghost" size="icon-sm" aria-label="Remove the rule for {basename(cwd)}" onclick={() => setProject(cwd, null)}><X /></Button>
 							</li>

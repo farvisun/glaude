@@ -932,13 +932,15 @@ export const mockBackend: Record<string, (args: Record<string, unknown>) => unkn
 	sessions_list: async () => {
 		const now = Date.now();
 		return [
-			{ provider: "claude", id: "s1", cwd: "/Users/demo/Projects/glaude", title: "رفع مشکل جهت متن در پیام‌ها", updated: now - 4 * 60e3 },
-			{ provider: "claude", id: "s3", cwd: "/Users/demo/Projects/shop", title: "گزارش فروش هفتگی", updated: now - 26 * 3600e3 },
-			{ provider: "claude", id: "s4", cwd: "/Users/demo/Projects/shop", title: "Fix checkout rounding", updated: now - 3 * 86400e3 },
+			{ provider: "claude", id: "s1", cwd: "/Users/demo/Projects/glaude", title: "رفع مشکل جهت متن در پیام‌ها", updated: now - 4 * 60e3, created: now - 9 * 86400e3 },
+			{ provider: "claude", id: "s3", cwd: "/Users/demo/Projects/shop", title: "گزارش فروش هفتگی", updated: now - 26 * 3600e3, created: now - 2 * 86400e3 },
+			{ provider: "claude", id: "s4", cwd: "/Users/demo/Projects/shop", title: "Fix checkout rounding", updated: now - 3 * 86400e3, created: now - 5 * 86400e3 },
+			{ provider: "claude", id: "s5", cwd: "/Users/demo/Projects/shop-api", title: "Add order export endpoint", updated: now - 2 * 3600e3, created: now - 2 * 3600e3 },
+			{ provider: "claude", id: "s6", cwd: "/Users/demo/scratch/notes", title: "Summarize meeting notes", updated: now - 6 * 86400e3, created: now - 6 * 86400e3 },
 		];
 	},
 	codex_sessions_list: async () => [
-		{ provider: "codex", id: "s2", cwd: "/Users/demo/Projects/glaude", title: "Add terminal tabs with portable-pty", updated: Date.now() - 3 * 3600e3 },
+		{ provider: "codex", id: "s2", cwd: "/Users/demo/Projects/glaude", title: "Add terminal tabs with portable-pty", updated: Date.now() - 3 * 3600e3, created: Date.now() - 4 * 86400e3 },
 	],
 	accounts_list: async () => mockAccounts.map((a) => ({ ...a })),
 	accounts_refresh: async (args) => {

@@ -10,6 +10,9 @@
 	import { ui } from "$lib/state/ui.svelte";
 	import { permissionModes, startConversation, showError } from "$lib/state/sessions";
 	import { proxies, isSocks } from "$lib/state/proxies.svelte";
+	import { projects, PROJECT_COLORS } from "$lib/state/projects.svelte";
+	import ProjectIcon from "./ProjectIcon.svelte";
+	import { basename } from "$lib/format";
 	import ProxyPicker from "./ProxyPicker.svelte";
 	import TriangleAlert from "@lucide/svelte/icons/triangle-alert";
 	import { call } from "$lib/ipc";
@@ -41,6 +44,31 @@
 		if (ui.newConversationOpen) void proxies.ready();
 	});
 	const net = $derived(proxies.resolve({ provider, account, cwd }, proxy));
+
+	// Inside a project: its defaults fill the form (once per project picked).
+	const project = $derived(projects.of(cwd.trim()));
+	let appliedFor: string | null = null;
+	$effect(() => {
+		if (!ui.newConversationOpen) {
+			appliedFor = null;
+			return;
+		}
+		const p = project;
+		const key = p?.id ?? "";
+		if (key === appliedFor) return;
+		appliedFor = key;
+		if (!p || ui.newConversationPreset) return;
+		untrack(() => {
+			const d = p.defaults;
+			if (d.provider) switchProvider(d.provider);
+			if (d.account) account = d.account;
+			if (d.model) model = d.model;
+			if (d.effort) effort = d.effort;
+			if (d.mode) mode = d.mode;
+		});
+	});
+	/** Outside every project: make the folder one. */
+	let addProject = $state(false);
 	/** Claude: run the session as this agent ("" = the default). */
 	let agent = $state("");
 	// Work in a new git worktree (own branch and folder).
@@ -159,6 +187,12 @@
 				return;
 			}
 		}
+		if (addProject && !project) {
+			const used = new Set(projects.list.map((p) => p.color));
+			const color = (PROJECT_COLORS.find((c) => c.id !== "gray" && !used.has(c.id)) ?? PROJECT_COLORS[6]).id;
+			projects.add({ name: basename(cwd.trim()) || "Project", folders: [cwd.trim()], color, defaults: {} });
+		}
+		addProject = false;
 		ui.newConversationOpen = false;
 		inWorktree = false;
 		branchName = "";
@@ -212,14 +246,31 @@
 					<Input id="nc-cwd" bind:value={cwd} dir="ltr" class="font-mono text-[13px]" placeholder="/path/to/project" />
 					<Button type="button" variant="secondary" size="icon" aria-label="Choose folder" onclick={pickFolder}><FolderOpen /></Button>
 				</div>
-				{#if last.recent.length}
+				{#if projects.list.length || last.recent.length}
+					<!-- Projects first, then recent folders outside them. -->
 					<div class="flex flex-wrap gap-1">
-						{#each last.recent.slice(0, 5) as r (r)}
-							<button type="button" class="bg-muted hover:bg-accent truncate rounded px-1.5 py-0.5 font-mono text-[11px]" dir="ltr" onclick={() => (cwd = r)}
+						{#each projects.list as p (p.id)}
+							<button
+								type="button"
+								class="hover:bg-accent inline-flex h-6 max-w-40 items-center gap-1 rounded-md border px-1.5 text-[12px] {project?.id === p.id
+									? 'border-foreground/30 bg-accent'
+									: 'border-border'}"
+								onclick={() => (cwd = p.folders[0])}
+								title={p.folders[0]}><ProjectIcon project={p} class="size-3" /><span class="truncate">{p.name}</span></button
+							>
+						{/each}
+						{#each last.recent.filter((r) => !projects.of(r)).slice(0, 4) as r (r)}
+							<button type="button" class="bg-muted hover:bg-accent h-6 truncate rounded-md px-1.5 font-mono text-[11px]" dir="ltr" onclick={() => (cwd = r)}
 								>{r.split("/").filter(Boolean).pop()}</button
 							>
 						{/each}
 					</div>
+				{/if}
+				{#if cwd.trim() && !project}
+					<label class="text-muted-foreground flex items-center gap-2 text-[12px]">
+						<Switch bind:checked={addProject} aria-label="Add as a project" class="scale-90" />
+						Add {basename(cwd.trim()) || "this folder"} as a project
+					</label>
 				{/if}
 			</div>
 
@@ -259,11 +310,9 @@
 						<Select.Content class="max-h-72">
 							<Select.Item value="" label="Default (Claude)">Default (Claude)</Select.Item>
 							{#each agentList as a (a.name)}
-								<Select.Item value={a.name} label={a.name}>
-									<span class="flex min-w-0 flex-col">
-										<span>{a.name}</span>
-										{#if a.description}<span class="text-muted-foreground line-clamp-1 text-xs">{a.description}</span>{/if}
-									</span>
+								<Select.Item value={a.name} label={a.name} title={a.description || undefined}>
+									<span class="shrink-0">{a.name}</span>
+									{#if a.description}<span class="text-muted-foreground min-w-0 flex-1 truncate text-xs">{a.description}</span>{/if}
 								</Select.Item>
 							{/each}
 						</Select.Content>

@@ -17,6 +17,7 @@
 	import * as Tooltip from "$lib/components/ui/tooltip";
 	import { Kbd } from "$lib/components/ui/kbd";
 	import { termPanel } from "$lib/state/termpanel.svelte";
+	import { projects, colorOf } from "$lib/state/projects.svelte";
 	import FileText from "@lucide/svelte/icons/file-text";
 	import GitCompare from "@lucide/svelte/icons/git-compare";
 	import ChevronDown from "@lucide/svelte/icons/chevron-down";
@@ -109,6 +110,11 @@
 		e.preventDefault();
 	}
 
+	// The project's colour on its conversation tabs.
+	const projectColor = (ref?: string) => {
+		const c = ref ? conversations.byId[ref] : undefined;
+		return c ? colorOf(projects.of(c.cwd)) : undefined;
+	};
 	const providerColor = (ref?: string) =>
 		ref && conversations.byId[ref]?.provider === "codex" ? "var(--codex)" : ref && conversations.byId[ref] ? "var(--claude)" : undefined;
 	function tooltip(tabId: string): string {
@@ -172,7 +178,7 @@
 					{...tabProps}
 					data-tab-id={tabId}
 					title={tooltip(tabId)}
-					class="group border-border/70 relative -mb-px flex max-w-56 min-w-0 shrink-0 cursor-default items-center gap-1.5 border-e ps-3 pe-1.5 text-[13px] select-none
+					class="motion-tab group border-border/70 relative -mb-px flex max-w-56 min-w-0 shrink-0 cursor-default items-center gap-1.5 border-e ps-3 pe-1.5 text-[13px] select-none
 					{tabId === pane.active
 						? 'bg-background text-foreground border-b border-b-transparent'
 						: 'text-muted-foreground hover:bg-accent/40 hover:text-foreground border-b border-b-transparent'}"
@@ -207,6 +213,7 @@
 						<span class="bg-primary absolute inset-y-1.5 -start-px w-0.5 rounded"></span>
 					{/if}
 					<Icon class="size-3.5 shrink-0" style={providerColor(tab.ref) ? `color: ${providerColor(tab.ref)}` : undefined} />
+					{#if projectColor(tab.ref)}<span class="size-1.5 shrink-0 rounded-full" style:background={projectColor(tab.ref)} title={projects.of(conversations.byId[tab.ref ?? ""]?.cwd)?.name}></span>{/if}
 					<span class="truncate" dir="auto">{tab.title}</span>
 					<!-- Status in the close slot; the close button shows on hover (and on the active tab without status). -->
 					<span class="relative ms-1 grid size-5 shrink-0 place-items-center">

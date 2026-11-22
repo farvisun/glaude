@@ -358,6 +358,8 @@ pub struct ThreadSummary {
     pub title: String,
     /// Unix ms of the last update.
     pub updated: u64,
+    /// Unix ms the thread was created.
+    pub created: u64,
     pub path: String,
 }
 
@@ -388,6 +390,12 @@ impl ThreadSummary {
                 title
             },
             updated: t.get("updatedAt").and_then(Value::as_u64).unwrap_or(0) * 1000,
+            created: t
+                .get("createdAt")
+                .or(t.get("updatedAt"))
+                .and_then(Value::as_u64)
+                .unwrap_or(0)
+                * 1000,
             path: t
                 .get("path")
                 .and_then(Value::as_str)

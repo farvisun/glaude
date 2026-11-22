@@ -23,6 +23,8 @@ pub struct SessionSummary {
     pub title: String,
     /// Unix ms of the last write.
     pub updated: u64,
+    /// Unix ms the session started (file creation; the last write if unknown).
+    pub created: u64,
     pub path: String,
 }
 
@@ -152,12 +154,18 @@ pub fn summarize(path: &Path) -> Option<SessionSummary> {
         .ok()
         .and_then(|m| m.duration_since(UNIX_EPOCH).ok())
         .map_or(0, |d| d.as_millis() as u64);
+    let created = meta
+        .created()
+        .ok()
+        .and_then(|m| m.duration_since(UNIX_EPOCH).ok())
+        .map_or(updated, |d| d.as_millis() as u64);
     Some(SessionSummary {
         provider: "claude",
         id,
         cwd,
         title,
         updated,
+        created,
         path: path.display().to_string(),
     })
 }

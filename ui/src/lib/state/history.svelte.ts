@@ -8,6 +8,8 @@ export interface SessionSummary {
 	cwd: string;
 	title: string;
 	updated: number;
+	/** When the session started (ms); older backends leave it out. */
+	created?: number;
 	path?: string;
 	account?: string;
 }

@@ -30,6 +30,8 @@ class UiState {
 	settingsSection = $state<string | null>(null);
 	/** Settings → Network: the proxy being added or edited. */
 	proxyEdit = $state<import("./proxies.svelte").Proxy | "new" | null>(null);
+	/** Sidebar: the project being created ("new", optionally from a folder) or edited. */
+	projectEdit = $state<import("./projects.svelte").Project | { folder?: string } | null>(null);
 	/** Sidebar: the past session being renamed. */
 	renameSession = $state<import("./history.svelte").SessionSummary | null>(null);
 	/** Set by the app shell: show or hide the sidebar. */

@@ -16,6 +16,22 @@
 	import { ui } from "$lib/state/ui.svelte";
 	import { history } from "$lib/state/history.svelte";
 	import SessionList from "./SessionList.svelte";
+	import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
+	import ArrowUpDown from "@lucide/svelte/icons/arrow-up-down";
+	import FolderPlus from "@lucide/svelte/icons/folder-plus";
+	import Check from "@lucide/svelte/icons/check";
+	import { projects, type ProjectSort, type SessionSort } from "$lib/state/projects.svelte";
+
+	const projectSorts: { value: ProjectSort; label: string }[] = [
+		{ value: "manual", label: "Your order (drag)" },
+		{ value: "recent", label: "Recent activity" },
+		{ value: "name", label: "Name" },
+	];
+	const sessionSorts: { value: SessionSort; label: string }[] = [
+		{ value: "recent", label: "Recent activity" },
+		{ value: "created", label: "Newest first" },
+		{ value: "name", label: "Name" },
+	];
 	import { termPanel } from "$lib/state/termpanel.svelte";
 	import LiveAgents from "./LiveAgents.svelte";
 	import { onMount } from "svelte";
@@ -66,7 +82,37 @@
 	<div class="scrollbar-thin min-h-0 flex-1 overflow-y-auto px-2">
 		<LiveAgents />
 		<section class="pb-2">
-			<h2 class="text-muted-foreground flex h-6 items-center px-1 text-[11px] font-semibold tracking-wide uppercase">Projects</h2>
+			<div class="group/head flex h-7 items-center gap-0.5 ps-1 pe-1">
+				<h2 class="text-muted-foreground text-[11px] font-semibold tracking-wide uppercase">Projects</h2>
+				<DropdownMenu.Root>
+					<DropdownMenu.Trigger
+						class="text-muted-foreground hover:text-foreground hover:bg-sidebar-accent ms-auto grid size-6 place-items-center rounded"
+						aria-label="Sort projects and conversations"
+						title="Sort"><ArrowUpDown class="size-3.5" /></DropdownMenu.Trigger
+					>
+					<DropdownMenu.Content align="end" class="w-52">
+						<DropdownMenu.Label class="text-muted-foreground text-xs font-normal">Projects</DropdownMenu.Label>
+						{#each projectSorts as o (o.value)}
+							<DropdownMenu.Item onclick={() => projects.setSort(o.value)}
+								><Check class={projects.sort === o.value ? "" : "invisible"} /><span>{o.label}</span></DropdownMenu.Item
+							>
+						{/each}
+						<DropdownMenu.Separator />
+						<DropdownMenu.Label class="text-muted-foreground text-xs font-normal">Conversations</DropdownMenu.Label>
+						{#each sessionSorts as o (o.value)}
+							<DropdownMenu.Item onclick={() => projects.setSessionSort(o.value)}
+								><Check class={projects.sessionSort === o.value ? "" : "invisible"} /><span>{o.label}</span></DropdownMenu.Item
+							>
+						{/each}
+					</DropdownMenu.Content>
+				</DropdownMenu.Root>
+				<button
+					class="text-muted-foreground hover:text-foreground hover:bg-sidebar-accent grid size-6 place-items-center rounded"
+					aria-label="New project"
+					title="New project"
+					onclick={() => (ui.projectEdit = {})}><FolderPlus class="size-3.5" /></button
+				>
+			</div>
 			<SessionList />
 		</section>
 	</div>
