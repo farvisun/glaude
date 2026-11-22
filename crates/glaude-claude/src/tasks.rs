@@ -138,6 +138,20 @@ impl Tasks {
             .find(|t| t.tool_use_id.as_deref() == Some(tool_use_id))
     }
 
+    /// A subagent's final report, from the notification the CLI feeds the
+    /// model. Returns the task when it changed.
+    pub fn set_report(&mut self, tool_use_id: &str, report: &str) -> Option<TaskInfo> {
+        let t = self
+            .map
+            .values_mut()
+            .find(|t| t.tool_use_id.as_deref() == Some(tool_use_id))?;
+        if t.report.as_deref() == Some(report) {
+            return None;
+        }
+        t.report = Some(report.to_string());
+        Some(t.clone())
+    }
+
     fn entry(&mut self, v: &Value) -> Option<&mut TaskInfo> {
         let id = s(v, "task_id")?.to_string();
         Some(self.map.entry(id.clone()).or_insert_with(|| TaskInfo {

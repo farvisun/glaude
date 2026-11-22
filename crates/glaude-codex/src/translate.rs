@@ -764,6 +764,7 @@ impl Translator {
                     status: Status::Pending,
                     reason: s(p, "reason").map(str::to_string),
                     blocks: Vec::new(),
+                    tool_use_id: String::new(),
                 }
             }
             "item/fileChange/requestApproval" => {
@@ -785,6 +786,7 @@ impl Translator {
                     status: Status::Pending,
                     reason: s(p, "reason").map(str::to_string),
                     blocks: Vec::new(),
+                    tool_use_id: String::new(),
                 }
             }
             _ => return None,
@@ -842,6 +844,7 @@ fn with_status(item: Item, st: Status) -> Item {
             options,
             reason,
             blocks,
+            tool_use_id,
             ..
         } => Item::Permission {
             id,
@@ -854,6 +857,7 @@ fn with_status(item: Item, st: Status) -> Item {
             status: st,
             reason,
             blocks,
+            tool_use_id,
         },
         other => other,
     }

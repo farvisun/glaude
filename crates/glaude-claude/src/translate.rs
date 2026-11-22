@@ -369,6 +369,7 @@ impl Translator {
                 questions: tools::questions(&p.input),
                 status,
                 answers: p.answers.clone(),
+                tool_use_id: p.tool_use_id.clone(),
             };
         }
         Item::Permission {
@@ -382,6 +383,22 @@ impl Translator {
             status,
             reason: p.reason.clone(),
             blocks: p.blocks.clone(),
+            tool_use_id: p.tool_use_id.clone(),
+        }
+    }
+
+    fn live_notification(&mut self, text: &str, out: &mut Output) {
+        let Some((tool_use_id, _, _, Some(result))) = tasks::parse_notification(text) else {
+            return;
+        };
+        if let Some(task) = self.tasks.set_report(&tool_use_id, &result) {
+            out.events.push(ConvEvent::Task { task });
+        }
+        if let Some(t) = self.tools.get_mut(&tool_use_id) {
+            t.output = Some(truncate(result));
+        }
+        if let Some(item) = self.tool_item(&tool_use_id) {
+            out.events.push(ConvEvent::Item { item });
         }
     }
 
@@ -800,6 +817,11 @@ impl Translator {
                 if v.get("isReplay").and_then(Value::as_bool).unwrap_or(false)
                     || self.sent_uuids.contains(&uuid)
                 {
+                    // A finished background task is fed to the model as a
+                    // replayed message; its <result> is the agent's report.
+                    if let Some(text) = content.as_str() {
+                        self.live_notification(text, out);
+                    }
                     return;
                 }
                 if v.get("isCompactSummary")
@@ -1722,6 +1744,12 @@ mod tests {
         assert!(tasks
             .iter()
             .any(|t| t.kind == "shell" && t.status == "completed"));
+        // The report comes from the notification fed to the model.
+        let last_agent = tasks.iter().rev().find(|t| t.kind == "agent").unwrap();
+        assert!(
+            last_agent.report.as_deref().is_some_and(|r| !r.is_empty()),
+            "{last_agent:?}"
+        );
         let items = final_items(&events);
         // Subagent steps are linked to the Agent call and were not cut off.
         let agent_call = items

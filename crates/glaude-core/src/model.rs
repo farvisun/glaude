@@ -295,6 +295,9 @@ pub enum Item {
         /// Rendered body, e.g. the plan of an ExitPlanMode request.
         #[serde(skip_serializing_if = "Vec::is_empty", default)]
         blocks: Vec<Block>,
+        /// The tool call this prompt is about.
+        #[serde(skip_serializing_if = "String::is_empty", default)]
+        tool_use_id: String,
     },
     /// Claude asks the user (AskUserQuestion); answered from the UI.
     #[serde(rename_all = "camelCase")]
@@ -307,6 +310,8 @@ pub enum Item {
         /// Question text -> chosen label(s), once answered.
         #[serde(skip_serializing_if = "BTreeMap::is_empty", default)]
         answers: BTreeMap<String, String>,
+        #[serde(skip_serializing_if = "String::is_empty", default)]
+        tool_use_id: String,
     },
     #[serde(rename_all = "camelCase")]
     System {
