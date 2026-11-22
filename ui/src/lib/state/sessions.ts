@@ -101,6 +101,34 @@ export async function startConversation(spec: StartSpec, paneId?: string): Promi
 	return (await connect(conv, spec)) ? conv : null;
 }
 
+const IDLE_MS = 15 * 60_000;
+let reaper: ReturnType<typeof setInterval> | null = null;
+
+/** Stop agent processes idle for 15 minutes; the next message resumes the
+ *  same session (ensureAlive). Keeps memory flat with many open tabs. */
+export function startIdleReaper() {
+	if (reaper) return;
+	reaper = setInterval(() => {
+		const now = Date.now();
+		for (const conv of Object.values(conversations.byId)) {
+			if (!conv.alive || conv.running || conv.pendingPermissions > 0) continue;
+			if (now - conv.lastActivity < IDLE_MS) continue;
+			conv.alive = false;
+			call("conv_close", { convId: conv.id }).catch(() => {});
+		}
+	}, 60_000);
+}
+
+/** Focus the tab of a past session if it is open, otherwise resume it. */
+export function openSession(s: { provider: Provider; id: string; cwd: string; title?: string; account?: string }) {
+	const open = Object.values(conversations.byId).find((c) => c.session.sessionId === s.id);
+	if (open) {
+		const tab = Object.values(layout.tabs).find((t) => t.ref === open.id);
+		if (tab) return layout.activate(tab.id);
+	}
+	void startConversation({ provider: s.provider, account: s.account ?? "default", cwd: s.cwd, resume: s.id, title: s.title });
+}
+
 /** Restart an ended process, resuming the same session. */
 async function ensureAlive(conv: Conversation): Promise<boolean> {
 	if (conv.alive) return true;
@@ -153,6 +181,7 @@ export async function openLink(href: string) {
 
 export const convActions = {
 	async send(conv: Conversation, text: string, attachments: Attachment[]) {
+		conv.lastActivity = Date.now();
 		try {
 			if (!(await ensureAlive(conv))) return;
 			if (conv.items.every((i) => i.kind !== "user") && text) {

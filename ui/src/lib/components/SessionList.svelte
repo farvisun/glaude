@@ -1,8 +1,7 @@
 <script lang="ts">
 	import { history, type SessionSummary } from "$lib/state/history.svelte";
 	import { conversations } from "$lib/state/conversations.svelte";
-	import { layout } from "$lib/state/layout.svelte";
-	import { startConversation } from "$lib/state/sessions";
+	import { openSession } from "$lib/state/sessions";
 	import { fmtAgo } from "$lib/format";
 	import ChevronRight from "@lucide/svelte/icons/chevron-right";
 	import Plus from "@lucide/svelte/icons/plus";
@@ -11,14 +10,7 @@
 	const SHOW = 6;
 	let expanded = $state<Record<string, boolean>>({});
 
-	function openConv(s: SessionSummary) {
-		const open = Object.values(conversations.byId).find((c) => c.session.sessionId === s.id);
-		if (open) {
-			const tab = Object.values(layout.tabs).find((t) => t.ref === open.id);
-			if (tab) return layout.activate(tab.id);
-		}
-		startConversation({ provider: s.provider, account: s.account ?? "default", cwd: s.cwd, resume: s.id, title: s.title });
-	}
+	const openConv = (s: SessionSummary) => openSession(s);
 
 	function runningIds(): Set<string> {
 		const ids = new Set<string>();

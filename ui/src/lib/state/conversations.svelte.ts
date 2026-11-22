@@ -28,6 +28,8 @@ export class Conversation {
 	session = $state<SessionInfo>({});
 	limits = $state<Limits>({});
 	alive = $state(false);
+	/** Last event or message (ms); used to stop idle processes. Not reactive. */
+	lastActivity = Date.now();
 	loading = $state(false);
 
 	private index = new Map<string, number>();
@@ -65,6 +67,7 @@ export class Conversation {
 	}
 
 	apply(ev: ConvEvent) {
+		this.lastActivity = Date.now();
 		switch (ev.type) {
 			case "item":
 				this.upsert(ev.item);

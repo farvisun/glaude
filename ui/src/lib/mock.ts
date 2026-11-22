@@ -290,6 +290,17 @@ export const mockBackend: Record<string, (args: Record<string, unknown>) => unkn
 		}
 	},
 	pty_resize: async () => {},
+	search_refresh: async () => {},
+	search_status: async () => ({ ready: true, indexing: false, progress: 1, messages: 27465, error: null }),
+	search_query: async (args) => {
+		const q = String(args.query);
+		if (!q.trim()) return [];
+		const mark = (t: string) => t.replace(q, `<mark>${q}</mark>`);
+		return [
+			{ provider: "claude", sessionId: "s1", cwd: "/Users/demo/Projects/glaude", role: "user", ts: Date.now() - 4 * 60e3, snippet: mark(`…چرا جهت متن ${q} در پیام‌ها اشتباه نمایش داده می‌شود؟`), matches: 3 },
+			{ provider: "codex", sessionId: "s2", cwd: "/Users/demo/Projects/glaude", role: "assistant", ts: Date.now() - 3 * 3600e3, snippet: mark(`Added terminal tabs; ${q} now survives tab moves…`), matches: 1 },
+		];
+	},
 	statusline_render: async () =>
 		'<span style="color:#7fd18b">glaude</span> <span class="ansi-fg-8">|</span> 🌿 (master) <span class="ansi-fg-8">|</span> <span style="color:#f2c66d;font-weight:600">42%</span> <span class="ansi-fg-8">|</span> 🤖 Opus 5.5 (high)',
 	pty_close: async (args) => {

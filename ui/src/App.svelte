@@ -6,13 +6,17 @@
 	import Sidebar from "$lib/components/Sidebar.svelte";
 	import PaneView from "$lib/components/PaneView.svelte";
 	import NewConversationDialog from "$lib/components/NewConversationDialog.svelte";
-	import { convActions } from "$lib/state/sessions";
+	import SearchPalette from "$lib/components/SearchPalette.svelte";
+	import { convActions, startIdleReaper } from "$lib/state/sessions";
 	import { dispose as disposeTerminal, retheme } from "$lib/state/terminals";
 	import { layout } from "$lib/state/layout.svelte";
+	import { ui } from "$lib/state/ui.svelte";
 	import { prefs, isMac } from "$lib/state/prefs.svelte";
 	import type { Pane } from "paneforge";
 
 	let sidebarPane = $state<Pane>();
+
+	startIdleReaper();
 
 	layout.onClose = (tab) => {
 		if (tab.kind === "conversation" && tab.ref) convActions.close(tab.ref);
@@ -59,6 +63,10 @@
 			if (layout.sidebar.collapsed) sidebarPane?.expand();
 			else sidebarPane?.collapse();
 		}
+		if (mod && e.key.toLowerCase() === "k") {
+			e.preventDefault();
+			ui.searchOpen = !ui.searchOpen;
+		}
 		if (mod && e.key.toLowerCase() === "w") {
 			e.preventDefault();
 			const active = layout.focusedLeaf.active;
@@ -72,6 +80,7 @@
 <ModeWatcher defaultMode="dark" />
 <Toaster position="bottom-right" richColors closeButton />
 <NewConversationDialog />
+<SearchPalette />
 
 <Tooltip.Provider delayDuration={400}>
 	<div class="h-full w-full">
