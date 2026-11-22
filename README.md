@@ -66,8 +66,29 @@ its own direction, keeps code left-to-right, and uses the Estedad font.
   scroll sideways with a list of all tabs when they don't fit.
 - **macOS menu bar**: Glaude, File, Edit, View, Conversation, Window and Help
   menus with every action and its shortcut, and a status icon listing the
-  agents that are working or waiting for you (it stays when the window is
-  closed; Cmd+Q quits).
+  agents that are working or waiting for you and what each is doing (it stays
+  when the window is closed; Cmd+Q quits).
+- **Live agent status**: the sidebar lists agents that need you, are working
+  (with their current step, e.g. "Editing App.svelte · 1m 20s") or finished
+  while you were elsewhere. The **Agents board** (⌥⌘A) shows every open agent
+  by state; approvals and questions can be answered there, and ⇧⌘A jumps to
+  the next agent waiting for you. Reminders fire when an agent has waited for
+  a while or a command runs long.
+- **Conversation view**: consecutive tool calls fold into one line ("Read 6
+  files · Ran 3 commands") with the edited files; each turn ends with its
+  time, cost, tokens and changed files, and actions to copy, retry, fork from
+  there, or ask the other tool to review. ⌘F finds in the conversation, an
+  outline of your prompts sits at the edge, and code blocks have copy, wrap
+  and fold.
+- **Cross-review**: Codex reviews Claude's uncommitted changes (or the other
+  way round) read-only in a pane beside it; "Send findings back" puts the
+  review in the original conversation's message box.
+- **Command palette** (⇧⌘P) for every action, open agent and saved prompt.
+  **Saved prompts** with fill-in parts like `{{file}}` are used by typing
+  `/name` in a message.
+- **Usage**: cost, tokens, turns and agent time per day, project and
+  conversation for turns run in Glaude, plus every account's 5-hour and
+  weekly limits. The progress panel shows a timeline of the latest turn.
 - **Settings** (Cmd+,): appearance (theme, palette, interface size, density,
   message width, code font), defaults for new conversations (tool, account,
   model, effort, permissions, send key), background and alerts (keep agents
