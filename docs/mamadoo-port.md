@@ -138,6 +138,28 @@ so the two can run side by side.
    - Claude: remove `CLAUDE_CONFIG_DIR`, then set it unless the account is `default`.
    - Codex: always set `CODEX_HOME`.
 
+## Status and verification
+
+Ported in `crates/glaude-accounts`. `examples/dump.rs` runs the same steps
+as the Python tool on any HOME (`list`, usage refresh, `share`).
+
+Checked against `account_manager.py` on a scratch HOME (subset of real
+transcripts and Codex state, fake auth files):
+
+- Usage: `.usage.json` totals, sessions, today/7d, models, limits, plans and
+  emails match for every account; the scan index (`.usage_index*.json`)
+  matches entry by entry (offsets, day buckets, dedup keys, mtimes).
+- Share: on two identical homes, Python and Rust produce the same log
+  lines, the same tree (links, merged files, backups), the same merged
+  thread rows and the same `.claude.json` (mode 0600).
+
+Known gaps:
+
+- Running-process detection uses `ps eww`, so it works on macOS and Linux
+  only; on Windows nothing counts as running (share never refuses there).
+- Model ties in the top-5 list may come out in a different order than in
+  Python (both sort by count; insertion order differs).
+
 ## Not ported to the UI
 
 `clear` is left out: in Python, `clear` on the Claude side wipes `$ROOT`, which includes the Codex config.
