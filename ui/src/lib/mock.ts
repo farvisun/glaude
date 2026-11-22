@@ -2,7 +2,7 @@
 // It plays a scripted Persian/English session so layout, bidi and streaming
 // can be checked without spawning real agents.
 import type { AppInfo, MockChannel } from "./ipc";
-import type { Block, ConvEvent, Item } from "./types";
+import type { Block, ConvEvent, Item, TaskInfo } from "./types";
 import { detectDir } from "./bidi";
 
 type Chan = MockChannel<ConvEvent[]>;
@@ -192,6 +192,304 @@ async function streamReply(ch: Chan, text: string) {
 	]);
 }
 
+// ---- Agents, workflows, questions, plans (type "demo agents" etc.) ----
+
+const pendingPrompts = new Map<string, Item>();
+const mockTasks = new Map<string, TaskInfo>();
+const mockAgents = [
+	{ name: "general-purpose", description: "General-purpose agent for research and multi-step tasks." },
+	{ name: "Explore", description: "Fast read-only search across the codebase.", model: "haiku" },
+	{ name: "Plan", description: "Designs an implementation plan without editing files." },
+	{ name: "code-reviewer", description: "Reviews a diff for bugs and risky changes.", model: "sonnet" },
+];
+
+function pushTask(ch: Chan, t: TaskInfo) {
+	mockTasks.set(t.id, t);
+	ch.push([{ type: "task", task: t }]);
+}
+
+async function userTurn(ch: Chan, text: string) {
+	ch.push([
+		{ type: "item", item: { kind: "user", id: "u" + Date.now(), blocks: [p(text)], attachments: [] } },
+		{ type: "turn", state: "thinking" },
+	]);
+	await sleep(500);
+}
+
+async function say(ch: Chan, text: string, parent?: string) {
+	const id = "a" + Date.now() + Math.random().toString(36).slice(2, 6);
+	ch.push([{ type: "item", item: { kind: "assistant", id, blocks: [p(text)], parent, streaming: false } }]);
+}
+
+async function demoAgents(ch: Chan, text: string) {
+	await userTurn(ch, text);
+	await say(ch, "I'll explore the codebase with two agents in parallel and run the tests in the background.");
+	const now = Date.now();
+	const calls = [
+		{ id: "toolu_ag1", type: "Explore", desc: "Find RTL handling", prompt: "Find where text direction is decided and list the files." },
+		{ id: "toolu_ag2", type: "code-reviewer", desc: "Review the bidi module", prompt: "Review src/lib/bidi.ts for edge cases with mixed Persian and English." },
+	];
+	for (const c of calls) {
+		ch.push([
+			{
+				type: "item",
+				item: { kind: "tool", id: c.id, name: "Agent", title: c.desc, status: "done", input: { description: c.desc, subagent_type: c.type, prompt: c.prompt }, output: "Async agent launched successfully." },
+			},
+		]);
+		pushTask(ch, { id: "task-" + c.id, toolUseId: c.id, kind: "agent", description: c.desc, subagentType: c.type, status: "running", background: true, startedAt: now });
+	}
+	ch.push([
+		{ type: "item", item: { kind: "tool", id: "toolu_sh1", name: "Bash", title: "bun run test", status: "done", input: { command: "bun run test", run_in_background: true }, output: "Command running in background with ID: b1" } },
+	]);
+	pushTask(ch, { id: "b1", toolUseId: "toolu_sh1", kind: "shell", description: "bun run test", status: "running", background: true, startedAt: now });
+	ch.push([{ type: "turnDone", durationMs: 4200 }]);
+
+	// The agents work in the background.
+	const steps: [string, string, string][] = [
+		["toolu_ag1", "Grep", "detectDir"],
+		["toolu_ag2", "Read", "src/lib/bidi.ts"],
+		["toolu_ag1", "Read", "crates/glaude-core/src/bidi.rs"],
+		["toolu_ag2", "Grep", "\\u200c"],
+	];
+	let n = 0;
+	for (const [parent, name, title] of steps) {
+		await sleep(900);
+		const id = `st${n++}`;
+		ch.push([{ type: "item", item: { kind: "tool", id, name, title, status: "done", parent, input: { pattern: title }, output: "3 matches" } }]);
+		const t = mockTasks.get("task-" + parent);
+		if (t && t.status === "running")
+			pushTask(ch, { ...t, lastTool: name, activity: name === "Grep" ? `Searching for ${title}` : `Reading ${title}`, usage: { tokens: 4200 * n, toolUses: n, durationMs: Date.now() - now } });
+	}
+	await say(ch, "Direction is decided per block from the share of strong RTL letters.", "toolu_ag1");
+	for (const c of calls) {
+		await sleep(700);
+		const t = mockTasks.get("task-" + c.id);
+		if (!t || t.status !== "running") continue;
+		const report =
+			c.type === "Explore"
+				? "Direction is decided in crates/glaude-core/src/bidi.rs (detect_dir) and mirrored in ui/src/lib/bidi.ts. Code blocks are always LTR."
+				: "Found one risk: a block that starts with a URL and is mostly Persian is marked LTR. Suggest ignoring URLs when counting.";
+		pushTask(ch, { ...t, status: "completed", endedAt: Date.now(), report, usage: { tokens: 18400, toolUses: 4, durationMs: Date.now() - now } });
+		ch.push([{ type: "item", item: { kind: "system", id: "sys" + c.id, level: "task", text: `${c.type} agent “${c.desc}” finished` } }]);
+	}
+	ch.push([{ type: "turn", state: "thinking" }]);
+	await sleep(800);
+	await say(ch, "Both agents are done. The bidi detector is in Rust with a TypeScript twin; the review found one edge case with leading URLs.");
+	ch.push([{ type: "turnDone", durationMs: 1800 }]);
+	await sleep(6000);
+	const sh = mockTasks.get("b1");
+	if (sh?.status === "running") {
+		pushTask(ch, { ...sh, status: "completed", endedAt: Date.now(), report: "42 tests passed" });
+		ch.push([{ type: "item", item: { kind: "system", id: "sys-b1", level: "task", text: "Background command “bun run test” completed (exit code 0)" } }]);
+	}
+}
+
+async function demoWorkflow(ch: Chan, text: string) {
+	await userTurn(ch, text);
+	const tid = "toolu_wf1";
+	const script = "export const meta = { name: 'review-bidi', phases: [{ title: 'Review' }, { title: 'Verify' }] }\nconst r = await agent('Review bidi.ts')\n";
+	ch.push([{ type: "item", item: { kind: "tool", id: tid, name: "Workflow", title: "review-bidi", status: "done", input: { script }, output: "Workflow launched" } }]);
+	const base: TaskInfo = {
+		id: "wf1",
+		toolUseId: tid,
+		kind: "workflow",
+		description: "Review changed files, verify each finding",
+		workflowName: "review-bidi",
+		status: "running",
+		background: true,
+		startedAt: Date.now(),
+		phases: [
+			{ index: 0, title: "Review" },
+			{ index: 1, title: "Verify" },
+		],
+		agents: [],
+	};
+	pushTask(ch, base);
+	ch.push([{ type: "turnDone", durationMs: 900 }]);
+	const agents = [
+		{ index: 0, label: "review:bugs", phaseIndex: 0, agentType: "general-purpose", model: "claude-opus-5-5" },
+		{ index: 1, label: "review:rtl", phaseIndex: 0, agentType: "general-purpose", model: "claude-opus-5-5" },
+		{ index: 2, label: "verify:bidi.ts", phaseIndex: 1, agentType: "Explore", model: "claude-haiku-5-5" },
+	];
+	let cur = base;
+	for (const a of agents) {
+		await sleep(700);
+		cur = { ...cur, agents: [...(cur.agents ?? []), { ...a, state: "progress", lastToolName: "Read", lastToolSummary: "Reading src/lib/bidi.ts", promptPreview: "Review the diff for…" }] };
+		pushTask(ch, cur);
+	}
+	for (const a of agents) {
+		await sleep(900);
+		if (mockTasks.get("wf1")?.status !== "running") return;
+		cur = {
+			...cur,
+			agents: (cur.agents ?? []).map((x) =>
+				x.index === a.index ? { ...x, state: a.index === 1 ? "error" : "done", tokens: 12000 + a.index * 3100, durationMs: 4100 + a.index * 900, resultPreview: "1 finding: leading URL flips direction", error: a.index === 1 ? "Agent hit the turn limit" : undefined } : x,
+			),
+			usage: { tokens: 40000, toolUses: 12, durationMs: Date.now() - cur.startedAt },
+		};
+		pushTask(ch, cur);
+	}
+	pushTask(ch, { ...cur, status: "completed", endedAt: Date.now(), report: "1 confirmed finding: a block starting with a URL is marked LTR." });
+	ch.push([{ type: "item", item: { kind: "system", id: "sys-wf1", level: "task", text: "Workflow “review-bidi” finished" } }]);
+}
+
+async function demoQuestion(ch: Chan, text: string) {
+	await userTurn(ch, text);
+	const item: Item = {
+		kind: "question",
+		id: "perm-q1",
+		requestId: "q1",
+		toolUseId: "toolu_q1",
+		status: "pending",
+		questions: [
+			{
+				question: "Which layout should the settings page use?",
+				header: "Layout",
+				multiSelect: false,
+				options: [
+					{ label: "Sidebar sections", description: "A list of sections on the left, content on the right.", preview: "┌────────┬──────────────┐\n│ General│ Theme  ◉ Dark │\n│ Agents │ Font   Estedad│\n│ Keys   │              │\n└────────┴──────────────┘" },
+					{ label: "Single page", description: "Everything on one scrolling page.", preview: "┌───────────────────────┐\n│ General               │\n│ Theme ◉ Dark          │\n│ Agents                │\n└───────────────────────┘" },
+				],
+			},
+			{
+				question: "کدام زبان‌ها پشتیبانی شوند؟",
+				header: "زبان‌ها",
+				multiSelect: true,
+				options: [
+					{ label: "فارسی", description: "راست‌به‌چپ با فونت استعداد" },
+					{ label: "English", description: "Left to right" },
+					{ label: "العربية" },
+				],
+			},
+		],
+	};
+	pendingPrompts.set("q1", item);
+	ch.push([{ type: "item", item }, { type: "turn", state: "waitingPermission" }]);
+}
+
+async function demoPlan(ch: Chan, text: string) {
+	await userTurn(ch, text);
+	ch.push([{ type: "session", info: { permissionMode: "plan" } }]);
+	await say(ch, "I read the composer and the bidi helpers. Here is the plan.");
+	const item: Item = {
+		kind: "permission",
+		id: "perm-plan1",
+		requestId: "plan1",
+		tool: "ExitPlanMode",
+		toolUseId: "toolu_plan1",
+		title: "Plan",
+		input: { plan: "…", planFilePath: "/Users/demo/.claude/plans/rtl-composer.md" },
+		options: [
+			{ id: "allow-accept-edits", label: "Yes, and auto-accept edits", kind: "allow" },
+			{ id: "allow-default", label: "Yes, and ask before each edit", kind: "allow" },
+			{ id: "deny", label: "No, keep planning", kind: "deny" },
+		],
+		status: "pending",
+		blocks: [
+			{ html: "<h2>RTL composer</h2>", dir: "ltr" },
+			{ html: "<p>Switch the composer direction as the user types, per paragraph.</p>", dir: "ltr" },
+			{ html: "<ol><li>Detect direction per line in <code>bidi.ts</code></li><li>Apply <code>dir</code> to the textarea</li><li>Add tests for mixed text: <bdi>سلام world</bdi></li></ol>", dir: "ltr" },
+			{ html: "<p>متن فارسی در پیش‌نمایش هم باید راست‌به‌چپ بماند.</p>", dir: "rtl" },
+		],
+	};
+	pendingPrompts.set("plan1", item);
+	ch.push([{ type: "item", item }, { type: "turn", state: "waitingPermission" }]);
+}
+
+const demoScenarios: [RegExp, (ch: Chan, text: string) => Promise<void>][] = [
+	[/^demo agents/i, demoAgents],
+	[/^demo workflow/i, demoWorkflow],
+	[/^demo ask/i, demoQuestion],
+	[/^demo plan/i, demoPlan],
+];
+
+function mockControl(convId: string, req: Record<string, unknown>): unknown {
+	const ch = chans.get(convId);
+	switch (req.subtype) {
+		case "get_context_usage":
+			return {
+				totalTokens: 42592,
+				maxTokens: 200000,
+				percentage: 21,
+				model: "claude-opus-5-5",
+				categories: [
+					{ id: "system_prompt", name: "System prompt", tokens: 3421, kind: "used" },
+					{ id: "system_tools", name: "System tools", tokens: 2771, kind: "used" },
+					{ id: "mcp_instructions", name: "MCP server instructions", tokens: 3971, kind: "used" },
+					{ id: "mcp_tools_deferred", name: "MCP tools (deferred)", tokens: 23480, kind: "deferred" },
+					{ id: "custom_agents", name: "Custom agents", tokens: 432, kind: "used" },
+					{ id: "memory_files", name: "Memory files", tokens: 4229, kind: "used" },
+					{ id: "skills", name: "Skills", tokens: 9959, kind: "used" },
+					{ id: "messages", name: "Messages", tokens: 17809, kind: "used" },
+					{ id: "autocompact_buffer", name: "Autocompact buffer", tokens: 33000, kind: "buffer" },
+					{ id: "free_space", name: "Free space", tokens: 124408, kind: "free" },
+				],
+				memoryFiles: [
+					{ path: "/Users/demo/.claude/CLAUDE.md", type: "User", tokens: 3858 },
+					{ path: "/Users/demo/Projects/glaude/CLAUDE.md", type: "Project", tokens: 371 },
+				],
+			};
+		case "mcp_status":
+			return {
+				mcpServers: [
+					{ name: "context", status: "connected", scope: "user", transport: "http", serverInfo: { name: "context-hub", version: "1.4.0" }, tools: [{ name: "search" }, { name: "get" }, { name: "remember" }] },
+					{ name: "figma", status: "failed", scope: "user", transport: "http", error: "502 Bad Gateway" },
+					{ name: "taskie", status: "connected", scope: "user", transport: "http", tools: [{ name: "task_create" }, { name: "task_list" }] },
+					{ name: "webstorm", status: "disabled", scope: "local", transport: "sse" },
+				],
+			};
+		case "mcp_reconnect":
+		case "mcp_toggle":
+			return {};
+		case "get_skills_dialog":
+			return {
+				skills: [
+					{ name: "codex-image", description: "Generate raster images by delegating to Codex.", source: "userSettings", tokens: 210, state: "on" },
+					{ name: "commit", description: "Commit pending changes as logical Conventional Commits.", source: "userSettings", tokens: 96, state: "on" },
+					{ name: "taskie-work-log", description: "Record agent work as a Taskie task.", source: "userSettings", tokens: 140, state: "user-invocable-only" },
+				],
+			};
+		case "get_hooks_listing":
+			return {
+				hooks: [
+					{ event: "PreToolUse", matcher: "Bash", source: "userSettings", sourceLabel: "User settings (~/.claude/settings.json)", type: "command", displayText: "rtk hook claude" },
+					{ event: "PostToolUse", matcher: "Bash", source: "userSettings", sourceLabel: "User settings (~/.claude/settings.json)", type: "command", displayText: "atuin hook claude-code" },
+					{ event: "SessionStart", matcher: "", source: "plugin", sourceLabel: "Plugin caveman", type: "command", displayText: "caveman init" },
+				],
+			};
+		case "get_memory_dialog":
+			return {
+				files: [
+					{ kind: "user", path: "/Users/demo/.claude/CLAUDE.md", label: "User instructions", exists: true },
+					{ kind: "project", path: "/Users/demo/Projects/glaude/CLAUDE.md", label: "Project instructions", exists: false },
+				],
+				folders: [{ kind: "auto", path: "/Users/demo/.claude/projects/-Users-demo-Projects-glaude/memory", label: "Open auto-memory folder" }],
+				auto_memory: { enabled: true, status: "on" },
+			};
+		case "get_task_output":
+			return { output: "$ bun run test\n✓ bidi > detects Persian (2 ms)\n✓ bidi > mixed lines (1 ms)\n✓ blocks > tables\n\n 42 pass\n 0 fail\n", total_bytes: 120, truncated: false };
+		case "stop_task": {
+			const t = mockTasks.get(req.task_id as string);
+			if (t && ch) {
+				const stopped = { ...t, status: "stopped", endedAt: Date.now() } as TaskInfo;
+				mockTasks.set(t.id, stopped);
+				ch.push([{ type: "task", task: stopped }, { type: "item", item: { kind: "system", id: "stop" + t.id, level: "task", text: `“${t.description}” was stopped` } }]);
+			}
+			return {};
+		}
+		case "rewind_files":
+			return req.dry_run ? { canRewind: true, filesChanged: ["src/lib/bidi.ts", "src/lib/components/conv/Composer.svelte"], insertions: 24, deletions: 6 } : { canRewind: true };
+		case "apply_flag_settings":
+			return {};
+		case "file_suggestions": {
+			const all = ["src/", "src/lib/", "src/lib/bidi.ts", "src/lib/types.ts", "src/App.svelte", "README.md", "docs/protocols.md"];
+			const q = String(req.query ?? "").toLowerCase();
+			return { suggestions: all.filter((f) => f.toLowerCase().includes(q)).map((path) => ({ path })) };
+		}
+	}
+	throw new Error(`${String(req.subtype)} is not available`);
+}
+
 export const mockBackend: Record<string, (args: Record<string, unknown>) => unknown> = {
 	app_info: (): AppInfo => ({
 		version: "0.1.0",
@@ -203,7 +501,7 @@ export const mockBackend: Record<string, (args: Record<string, unknown>) => unkn
 	conv_start: async (args) => {
 		const ch = args.onEvent as Chan;
 		chans.set(args.convId as string, ch);
-		const spec = args.spec as { provider: string; cwd: string; resume?: string };
+		const spec = args.spec as { provider: string; cwd: string; resume?: string; skipHistory?: boolean };
 		await sleep(80);
 		ch.push([
 			{
@@ -219,6 +517,9 @@ export const mockBackend: Record<string, (args: Record<string, unknown>) => unkn
 					contextWindow: 200000,
 					costUsd: 0.182,
 					slashCommands: ["compact", "clear", "review", "init", "cost", "context"],
+					agents: spec.provider === "claude" ? mockAgents : undefined,
+					outputStyle: "default",
+					outputStyles: ["default", "Proactive", "Concise", "Explanatory", "Learning"],
 					models: [
 						{ value: "opus", label: "Opus 5.5" },
 						{ value: "sonnet", label: "Sonnet 5.5" },
@@ -234,20 +535,37 @@ export const mockBackend: Record<string, (args: Record<string, unknown>) => unkn
 					plan: "max 20x",
 				},
 			},
-			{ type: "reset", items: spec.resume ? demoItems() : [] },
+			// Like the real driver: a restart (skipHistory) keeps what the UI shows.
+			...(spec.skipHistory ? [] : [{ type: "reset", items: spec.resume ? demoItems() : [] } as ConvEvent]),
 			{ type: "turn", state: spec.resume ? "waitingPermission" : "idle" },
 		]);
 		return null;
 	},
 	conv_send: async (args) => {
 		const ch = chans.get(args.convId as string);
-		if (ch) void streamReply(ch, args.text as string);
+		const text = args.text as string;
+		const scenario = demoScenarios.find(([re]) => re.test(text));
+		if (ch) void (scenario ? scenario[1](ch, text) : streamReply(ch, text));
 		return null;
 	},
 	conv_interrupt: async () => null,
 	conv_permission: async (args) => {
 		const ch = chans.get(args.convId as string);
 		const allow = String(args.optionId).startsWith("allow");
+		const prompt = pendingPrompts.get(args.requestId as string);
+		if (ch && prompt && (prompt.kind === "permission" || prompt.kind === "question")) {
+			pendingPrompts.delete(args.requestId as string);
+			ch.push([{ type: "item", item: { ...prompt, status: allow ? "done" : "declined" } as Item }]);
+			if (prompt.kind === "permission" && prompt.tool === "ExitPlanMode" && allow) {
+				const mode = args.optionId === "allow-accept-edits" ? "acceptEdits" : "default";
+				ch.push([{ type: "session", info: { permissionMode: mode } }, { type: "turn", state: "writing" }]);
+				await say(ch, "Plan approved. Starting with the direction detector.");
+			} else if (!allow) {
+				await say(ch, args.message ? `Understood: ${String(args.message)}` : "Okay, skipping that.");
+			}
+			ch.push([{ type: "turnDone", durationMs: 2000 }]);
+			return null;
+		}
 		if (ch) {
 			const it = demoItems().find((i) => i.kind === "permission") as Extract<Item, { kind: "permission" }>;
 			ch.push([
@@ -257,6 +575,32 @@ export const mockBackend: Record<string, (args: Record<string, unknown>) => unkn
 		}
 		return null;
 	},
+	conv_answer_question: async (args) => {
+		const ch = chans.get(args.convId as string);
+		const prompt = pendingPrompts.get(args.requestId as string);
+		if (ch && prompt?.kind === "question") {
+			pendingPrompts.delete(args.requestId as string);
+			const answers = args.answers as Record<string, string>;
+			ch.push([{ type: "item", item: { ...prompt, status: "done", answers } }, { type: "turn", state: "writing" }]);
+			await sleep(400);
+			await say(ch, `Got it: ${Object.values(answers).join(" · ")}.`);
+			ch.push([{ type: "turnDone", durationMs: 1500 }]);
+		}
+		return null;
+	},
+	conv_control: async (args) => {
+		await sleep(250);
+		return mockControl(args.convId as string, args.request as Record<string, unknown>);
+	},
+	conv_hook_runs: async () => [
+		{ name: "PreToolUse:Bash", event: "PreToolUse", outcome: "success", exitCode: 0, output: "", at: Date.now() - 40_000 },
+		{ name: "PostToolUse:Bash", event: "PostToolUse", outcome: "success", exitCode: 0, output: "", at: Date.now() - 38_000 },
+		{ name: "Stop", event: "Stop", outcome: "error", exitCode: 1, output: "notifier not found", at: Date.now() - 5_000 },
+	],
+	claude_agents: async () => mockAgents,
+	claude_rewind_target: async () => "demo-parent-uuid",
+	task_output_file: async () => "42 pass\n0 fail\n",
+	open_memory_path: async () => null,
 	conv_set_mode: async (args) => {
 		chans.get(args.convId as string)?.push([{ type: "session", info: { permissionMode: args.mode as string } }]);
 		return null;
