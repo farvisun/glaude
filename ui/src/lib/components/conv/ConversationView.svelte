@@ -7,7 +7,7 @@
 	import Composer from "./Composer.svelte";
 	import StatusLine from "./StatusLine.svelte";
 	import ProgressPanel from "./ProgressPanel.svelte";
-	import LoaderCircle from "@lucide/svelte/icons/loader-circle";
+	import TurnIndicator from "./TurnIndicator.svelte";
 	import { tick } from "svelte";
 	import { call } from "$lib/ipc";
 
@@ -99,7 +99,7 @@
 					{#if conv.loading}
 						<div class="flex flex-col gap-3">
 							{#each [0, 1, 2] as i (i)}
-								<div class="bg-muted h-16 animate-pulse rounded-lg"></div>
+								<div class="skeleton-shimmer h-16 rounded-lg"></div>
 							{/each}
 						</div>
 					{:else if conv.items.length === 0}
@@ -109,14 +109,11 @@
 					{/if}
 					{#each conv.items as item (item.id)}
 						<div class="cv-row">
-							<ItemView {item} {providerLabel} onDecide={decide} />
+							<ItemView {item} {providerLabel} provider={conv.provider} thoughtFor={(id) => conv.thoughtFor(id)} onDecide={decide} />
 						</div>
 					{/each}
 					{#if conv.turn !== "idle" && conv.turn !== "waitingPermission"}
-						<div class="text-muted-foreground flex items-center gap-2 text-[13px]">
-							<LoaderCircle class="text-primary size-3.5 animate-spin" />
-							<span>{conv.turnDetail ?? "Working"}</span>
-						</div>
+						<TurnIndicator {conv} />
 					{/if}
 				</div>
 			</div>

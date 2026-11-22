@@ -23,7 +23,7 @@
 {#if history.loading}
 	<div class="flex flex-col gap-2 px-1 py-1">
 		{#each [0, 1, 2, 3, 4] as i (i)}
-			<div class="bg-sidebar-accent h-8 animate-pulse rounded-md"></div>
+			<div class="skeleton-shimmer h-8 rounded-md"></div>
 		{/each}
 	</div>
 {:else if history.sessions.length === 0}

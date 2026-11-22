@@ -40,7 +40,7 @@
 					<span class="size-2.5 rounded-full {t.key === 'claude' ? 'bg-claude' : 'bg-codex'}"></span>
 					<span class="font-medium">{t.label}</span>
 					{#if info === null}
-						<span class="bg-muted ms-auto h-4 w-28 animate-pulse rounded"></span>
+						<span class="skeleton-shimmer ms-auto h-4 w-28 rounded"></span>
 					{:else if tool?.path}
 						<span class="text-muted-foreground ms-auto truncate text-xs" dir="ltr">{tool.version ?? tool.path}</span>
 						<CircleCheck class="text-ok size-4 shrink-0" />

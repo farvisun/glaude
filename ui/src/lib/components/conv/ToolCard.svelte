@@ -15,7 +15,6 @@
 	import Check from "@lucide/svelte/icons/check";
 	import XIcon from "@lucide/svelte/icons/x";
 	import Ban from "@lucide/svelte/icons/ban";
-	import LoaderCircle from "@lucide/svelte/icons/loader-circle";
 
 	type ToolLike = Extract<Item, { kind: "tool" | "command" | "fileChange" }>;
 	let { item }: { item: ToolLike } = $props();
@@ -67,7 +66,7 @@
 		<span class="text-muted-foreground min-w-0 truncate font-mono text-[12px]" dir="ltr">{view.title}</span>
 		<span class="ms-auto flex shrink-0 items-center gap-1.5">
 			{#if item.status === "running" || item.status === "pending"}
-				<LoaderCircle class="text-primary size-3.5 animate-spin" />
+				<span class="tool-running" aria-label="Running">⏺&#xFE0E;</span>
 			{:else if item.status === "done"}
 				{#if exitCode !== undefined && exitCode !== 0}
 					<span class="text-destructive font-mono text-[11px]">exit {exitCode}</span>
@@ -97,3 +96,23 @@
 		</div>
 	{/if}
 </div>
+
+<style>
+	.tool-running {
+		color: var(--muted-foreground);
+		font-size: 11px;
+		line-height: 1;
+		font-variant-emoji: text;
+		animation: tool-blink 1s steps(1, end) infinite;
+	}
+	@keyframes tool-blink {
+		50% {
+			opacity: 0.15;
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.tool-running {
+			animation: none;
+		}
+	}
+</style>

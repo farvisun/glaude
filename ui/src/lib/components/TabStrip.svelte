@@ -15,6 +15,8 @@
 	import { ui } from "$lib/state/ui.svelte";
 	import { isMac } from "$lib/state/prefs.svelte";
 	import { tabBadge } from "$lib/state/badges.svelte";
+	import { conversations } from "$lib/state/conversations.svelte";
+	import Spark from "$lib/components/conv/Spark.svelte";
 
 	let { pane, showExpand, onExpandSidebar }: { pane: Leaf; showExpand: boolean; onExpandSidebar?: () => void } =
 		$props();
@@ -115,7 +117,7 @@
 					<Icon class="size-3.5 shrink-0 {badge === 'attention' ? 'text-attention' : ''}" />
 					<span class="truncate" dir="auto">{tab.title}</span>
 					{#if badge === "running"}
-						<span class="bg-primary size-1.5 shrink-0 animate-pulse rounded-full" aria-label="Running"></span>
+						<span class="text-[12px]" aria-label="Running"><Spark color={tab.ref && conversations.byId[tab.ref]?.provider === "codex" ? "var(--codex)" : "var(--claude)"} /></span>
 					{:else if badge === "attention"}
 						<span class="bg-attention size-1.5 shrink-0 rounded-full" aria-label="Needs approval"></span>
 					{/if}

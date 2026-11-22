@@ -159,19 +159,30 @@ async function streamReply(ch: Chan, text: string) {
 	const uid = "u" + Date.now();
 	ch.push([{ type: "item", item: { kind: "user", id: uid, blocks: [p(text)], attachments: [] } }]);
 	ch.push([{ type: "turn", state: "thinking" }]);
-	await sleep(500);
+	const rid = "r" + Date.now();
+	ch.push([{ type: "item", item: { kind: "reasoning", id: rid, blocks: [], streaming: true } }]);
+	await sleep(1800);
+	ch.push([
+		{ type: "item", item: { kind: "reasoning", id: rid, blocks: [p("The user wants a quick check; read the file first.")], streaming: false } },
+		{ type: "turn", state: "tool" },
+	]);
+	const tid = "t" + Date.now();
+	const tool = { kind: "tool", id: tid, name: "Read", title: "src/main.rs", input: { file_path: "src/main.rs" } } as const;
+	ch.push([{ type: "item", item: { ...tool, status: "running" } as Item }]);
+	await sleep(1500);
+	ch.push([{ type: "item", item: { ...tool, status: "done", output: "fn main() {}" } as Item }]);
 	const aid = "a" + Date.now();
 	const reply =
 		detectDir(text) === "rtl"
 			? "باشه. این یک پاسخ آزمایشی از بک‌اند ساختگی است تا جریان متن، جهت پاراگراف و نشانگر تایپ را ببینیم. فایل `src/main.rs` را هم بررسی کردم و همه‌چیز درست است."
-			: "Sure. This is a mock reply streamed word by word so the streaming caret, block updates and auto-scroll can be checked without a real agent.";
+			: "Sure. This is a mock reply streamed word by word so streaming, block updates and auto-scroll can be checked without a real agent.";
 	ch.push([
 		{ type: "turn", state: "writing" },
 		{ type: "item", item: { kind: "assistant", id: aid, blocks: [], streaming: true } },
 	]);
 	const words = reply.split(" ");
 	for (let i = 1; i <= words.length; i++) {
-		await sleep(45);
+		await sleep(90);
 		ch.push([{ type: "blocks", id: aid, from: 0, blocks: [p(words.slice(0, i).join(" "))] }]);
 	}
 	ch.push([

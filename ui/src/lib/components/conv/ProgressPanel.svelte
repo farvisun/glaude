@@ -4,7 +4,7 @@
 	import PlanCard from "./PlanCard.svelte";
 	import { fmtDuration } from "$lib/format";
 	import Bot from "@lucide/svelte/icons/bot";
-	import LoaderCircle from "@lucide/svelte/icons/loader-circle";
+	import Spark from "./Spark.svelte";
 	import Check from "@lucide/svelte/icons/check";
 
 	let { conv }: { conv: Conversation } = $props();
@@ -66,6 +66,7 @@
 		}));
 	});
 
+	const sparkColor = $derived(conv.provider === "codex" ? "var(--codex)" : "var(--claude)");
 	const elapsed = $derived(conv.turnStartedAt ? Math.max(0, now - conv.turnStartedAt) : null);
 </script>
 
@@ -74,7 +75,7 @@
 		<h3 class="text-muted-foreground pb-1.5 text-xs font-medium">Now</h3>
 		<div class="flex items-center gap-2">
 			{#if conv.turn !== "idle"}
-				<LoaderCircle class="text-primary size-3.5 animate-spin" />
+				<Spark color={sparkColor} class="text-[14px]" />
 			{:else}
 				<span class="bg-muted-foreground/50 size-2 rounded-full"></span>
 			{/if}
@@ -110,7 +111,7 @@
 						<Bot class="text-muted-foreground size-3.5 shrink-0" />
 						<span class="min-w-0 truncate" dir="auto">{a.title}</span>
 						<span class="text-muted-foreground ms-auto shrink-0 text-xs">{a.steps}</span>
-						{#if a.status === "running"}<LoaderCircle class="text-primary size-3 animate-spin" />{:else}<Check
+						{#if a.status === "running"}<Spark color={sparkColor} class="text-[12px]" />{:else}<Check
 								class="text-ok size-3"
 							/>{/if}
 					</li>

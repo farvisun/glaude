@@ -57,6 +57,7 @@ export class Conversation {
 	}
 
 	private upsert(item: Item) {
+		if (item.kind === "reasoning") this.timeThinking(item.id, item.streaming);
 		const at = this.index.get(item.id);
 		const next = this.items.slice();
 		if (at === undefined) {
@@ -64,6 +65,21 @@ export class Conversation {
 			next.push(item);
 		} else next[at] = item;
 		this.items = next;
+	}
+
+	/** When each live reasoning item started and stopped (ms); not reactive. */
+	private thinkTimes = new Map<string, { start: number; end?: number }>();
+
+	private timeThinking(id: string, streaming: boolean) {
+		const t = this.thinkTimes.get(id);
+		if (streaming && !t) this.thinkTimes.set(id, { start: Date.now() });
+		else if (!streaming && t && t.end === undefined) t.end = Date.now();
+	}
+
+	/** How long the model thought, if this session watched it happen. */
+	thoughtFor(id: string): number | null {
+		const t = this.thinkTimes.get(id);
+		return t?.end !== undefined ? t.end - t.start : null;
 	}
 
 	apply(ev: ConvEvent) {

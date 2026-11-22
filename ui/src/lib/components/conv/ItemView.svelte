@@ -1,10 +1,12 @@
 <script lang="ts">
-	import type { Item } from "$lib/types";
+	import type { Item, Provider } from "$lib/types";
 	import Blocks from "./Blocks.svelte";
 	import ToolCard from "./ToolCard.svelte";
 	import PermissionCard from "./PermissionCard.svelte";
 	import PlanCard from "./PlanCard.svelte";
 	import Brain from "@lucide/svelte/icons/brain";
+	import Shimmer from "./Shimmer.svelte";
+	import { fmtDuration } from "$lib/format";
 	import ChevronRight from "@lucide/svelte/icons/chevron-right";
 	import Paperclip from "@lucide/svelte/icons/paperclip";
 	import TriangleAlert from "@lucide/svelte/icons/triangle-alert";
@@ -13,10 +15,21 @@
 	let {
 		item,
 		providerLabel,
+		provider = "claude",
+		thoughtFor,
 		onDecide,
-	}: { item: Item; providerLabel: string; onDecide: (item: Perm, optionId: string, message?: string) => void } = $props();
+	}: {
+		item: Item;
+		providerLabel: string;
+		provider?: Provider;
+		thoughtFor?: (id: string) => number | null;
+		onDecide: (item: Perm, optionId: string, message?: string) => void;
+	} = $props();
 
 	let thinkingOpen = $state(false);
+	const sparkColor = $derived(provider === "codex" ? "var(--codex)" : "var(--claude)");
+	// Read when the item stops streaming (the item object changes then).
+	const thoughtMs = $derived(item.kind === "reasoning" && !item.streaming ? (thoughtFor?.(item.id) ?? null) : null);
 </script>
 
 {#if item.kind === "user"}
@@ -45,8 +58,14 @@
 			disabled={item.blocks.length === 0}
 			onclick={() => (thinkingOpen = !thinkingOpen)}
 		>
-			<Brain class="size-3.5 {item.streaming ? 'text-primary animate-pulse' : ''}" />
-			<span>{item.streaming ? "Thinking…" : "Thought"}</span>
+			{#if item.streaming}
+				<!-- The ✻ spinner lives on the turn line below; one per conversation. -->
+				<Brain class="size-3.5" style="color: {sparkColor}" />
+				<Shimmer color={sparkColor}>Thinking…</Shimmer>
+			{:else}
+				<Brain class="size-3.5" />
+				<span>{thoughtMs != null ? `Thought for ${fmtDuration(Math.max(1000, thoughtMs))}` : "Thought"}</span>
+			{/if}
 			{#if item.blocks.length}
 				<ChevronRight class="size-3.5 transition-transform {thinkingOpen ? 'rotate-90' : ''}" />
 			{/if}
