@@ -199,20 +199,70 @@ pub fn codex_binary() -> Option<PathBuf> {
     resolve_binary("codex", "CODEX_BIN", &candidates)
 }
 
-/// `claude --version` style probe, first line of stdout.
+/// `claude --version` style probe, first line of stdout. Gives up after
+/// 5 s: a binary can stall before it runs (e.g. a macOS signature check
+/// waiting on the network), and nothing should wait on that forever.
 pub fn binary_version(bin: &Path) -> Option<String> {
-    let out = Command::new(bin)
+    binary_version_within(bin, Duration::from_secs(5))
+}
+
+fn binary_version_within(bin: &Path, limit: Duration) -> Option<String> {
+    use std::io::Read;
+    use std::process::Stdio;
+    let mut child = Command::new(bin)
         .arg("--version")
         .envs(agent_env(&[]))
-        .output()
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
         .ok()?;
-    let s = String::from_utf8_lossy(&out.stdout);
-    s.lines().next().map(|l| l.trim().to_string())
+    let deadline = std::time::Instant::now() + limit;
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => break,
+            Ok(None) if std::time::Instant::now() < deadline => {
+                std::thread::sleep(Duration::from_millis(25))
+            }
+            _ => {
+                tracing::warn!("{} --version did not finish in {limit:?}", bin.display());
+                let _ = child.kill();
+                let _ = child.wait();
+                return None;
+            }
+        }
+    }
+    let mut out = String::new();
+    child.stdout.take()?.read_to_string(&mut out).ok()?;
+    out.lines().next().map(|l| l.trim().to_string())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn version_probe_gives_up_on_a_stalled_binary() {
+        let dir = std::env::temp_dir().join(format!("glaude-probe-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let ok = dir.join("ok");
+        let slow = dir.join("slow");
+        std::fs::write(&ok, "#!/bin/sh\necho 'tool 1.2.3'\n").unwrap();
+        std::fs::write(&slow, "#!/bin/sh\nexec sleep 30\n").unwrap();
+        for f in [&ok, &slow] {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(f, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        assert_eq!(binary_version(&ok).as_deref(), Some("tool 1.2.3"));
+        let t = std::time::Instant::now();
+        assert_eq!(
+            binary_version_within(&slow, std::time::Duration::from_millis(300)),
+            None
+        );
+        assert!(t.elapsed() < std::time::Duration::from_secs(5));
+        std::fs::remove_dir_all(dir).ok();
+    }
 
     #[test]
     fn parses_env_dump_after_marker() {
