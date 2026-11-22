@@ -55,6 +55,10 @@ pub struct StartSpec {
     /// Restarting an ended session: the UI already shows its history.
     #[serde(default)]
     pub skip_history: bool,
+    /// Claude: resume only up to this message (rewind).
+    pub resume_at: Option<String>,
+    /// Claude: run the session as this agent.
+    pub agent: Option<String>,
 }
 
 fn err(e: impl std::fmt::Display) -> String {
@@ -124,6 +128,8 @@ pub async fn conv_start(
                 permission_mode: spec.permission_mode.clone(),
                 resume: spec.resume.clone(),
                 fork: spec.fork,
+                resume_at: spec.resume_at.clone(),
+                agent: spec.agent.clone(),
                 load_history: !spec.skip_history,
             };
             Agent::Claude(ClaudeSession::spawn(cs, push).await.map_err(err)?)
@@ -280,4 +286,108 @@ pub fn close_all(convs: &Convs, pool: &CodexPool) {
     // Whatever the async shutdowns above don't reach before exit,
     // including servers still in their startup handshake.
     glaude_core::procs::kill_all(std::time::Duration::from_millis(800));
+}
+
+/// Control requests the UI may send to a Claude session: read-only panels
+/// and the task, MCP, rewind and output-style actions it offers.
+const CONTROL_ALLOWED: &[&str] = &[
+    "get_context_usage",
+    "mcp_status",
+    "mcp_reconnect",
+    "mcp_toggle",
+    "get_skills_dialog",
+    "get_hooks_listing",
+    "get_memory_dialog",
+    "get_task_output",
+    "stop_task",
+    "rewind_files",
+    "apply_flag_settings",
+];
+
+#[tauri::command]
+pub async fn conv_control(
+    convs: State<'_, Convs>,
+    conv_id: String,
+    request: serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    let sub = request
+        .get("subtype")
+        .and_then(|s| s.as_str())
+        .unwrap_or("");
+    if !CONTROL_ALLOWED.contains(&sub) {
+        return Err(format!("{sub} is not available"));
+    }
+    let conv = convs.get(&conv_id)?;
+    match &conv.agent {
+        Agent::Claude(s) => s.request(request).await.map_err(err),
+        Agent::Codex(_) => Err("Not available for Codex conversations yet".into()),
+    }
+}
+
+#[tauri::command]
+pub fn conv_answer_question(
+    convs: State<'_, Convs>,
+    conv_id: String,
+    request_id: String,
+    answers: std::collections::BTreeMap<String, String>,
+) -> Result<(), String> {
+    match &convs.get(&conv_id)?.agent {
+        Agent::Claude(s) => s.answer_question(&request_id, answers),
+        Agent::Codex(_) => return Err("Not available for Codex conversations".into()),
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn conv_hook_runs(
+    convs: State<'_, Convs>,
+    conv_id: String,
+) -> Result<Vec<glaude_claude::translate::HookRun>, String> {
+    match &convs.get(&conv_id)?.agent {
+        Agent::Claude(s) => Ok(s.hook_runs()),
+        Agent::Codex(_) => Ok(Vec::new()),
+    }
+}
+
+/// Where to resume to rewind a Claude conversation to just before one of
+/// its user messages: the uuid of the message before it, or `None` when it
+/// was the first message (start fresh).
+#[tauri::command]
+pub async fn claude_rewind_target(
+    account: String,
+    cwd: String,
+    session_id: String,
+    user_uuid: String,
+) -> Result<Option<String>, String> {
+    let home = paths::claude_config_dir(&account)
+        .unwrap_or_else(|| glaude_core::env::home_dir().join(".claude"));
+    tokio::task::spawn_blocking(move || {
+        let path = glaude_claude::transcript::find_transcript(&home, &cwd, &session_id)
+            .ok_or("The transcript of this conversation was not found")?;
+        glaude_claude::transcript::parent_of(&path, &user_uuid)
+            .ok_or_else(|| "That message is not in the transcript yet".to_string())
+    })
+    .await
+    .map_err(err)?
+}
+
+/// The full output of a finished background task. Only `.output` files in
+/// Claude's task folders under the temp directory are read.
+#[tauri::command]
+pub async fn task_output_file(path: String) -> Result<String, String> {
+    let p = std::path::PathBuf::from(&path);
+    let tmp = std::env::temp_dir();
+    let allowed = p.extension().is_some_and(|e| e == "output")
+        && p.components().any(|c| c.as_os_str() == "tasks")
+        && (p.starts_with(&tmp) || p.starts_with("/tmp") || p.starts_with("/private/tmp"));
+    if !allowed {
+        return Err("Not a task output file".into());
+    }
+    tokio::task::spawn_blocking(move || {
+        let bytes = std::fs::read(&p).map_err(err)?;
+        let tail = bytes.len().saturating_sub(512 * 1024);
+        Ok(String::from_utf8_lossy(&bytes[tail..]).into_owned())
+    })
+    .await
+    .map_err(err)?
 }

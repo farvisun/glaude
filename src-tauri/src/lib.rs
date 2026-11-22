@@ -98,6 +98,12 @@ pub fn run() {
             conv::conv_set_mode,
             conv::conv_set_model,
             conv::conv_close,
+            conv::conv_control,
+            conv::conv_answer_question,
+            conv::conv_hook_runs,
+            conv::claude_rewind_target,
+            conv::task_output_file,
+            commands::claude_agents,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Glaude")

@@ -194,3 +194,83 @@ pub async fn codex_models(
     let server = pool.0.get(&home).await.map_err(err)?;
     server.models().await.map_err(err)
 }
+
+/// Agents for the new-conversation picker before any session runs:
+/// built-ins plus `agents/*.md` of the account and of the project.
+/// (Sessions report the full list, plugins included, once started.)
+#[tauri::command]
+pub async fn claude_agents(
+    account: String,
+    cwd: Option<String>,
+) -> Vec<glaude_core::model::AgentInfo> {
+    use glaude_core::model::AgentInfo;
+    let home = glaude_accounts::paths::claude_config_dir(&account)
+        .unwrap_or_else(|| glaude_core::env::home_dir().join(".claude"));
+    tokio::task::spawn_blocking(move || {
+        let builtin = |name: &str, description: &str| AgentInfo {
+            name: name.into(),
+            description: description.into(),
+            model: None,
+        };
+        let mut out = vec![
+            builtin(
+                "general-purpose",
+                "General-purpose agent for research and multi-step tasks.",
+            ),
+            builtin("Explore", "Fast read-only search across the codebase."),
+            builtin(
+                "Plan",
+                "Designs an implementation plan without editing files.",
+            ),
+        ];
+        let mut dirs = vec![home.join("agents")];
+        if let Some(c) = cwd.filter(|c| !c.is_empty()) {
+            dirs.push(std::path::Path::new(&c).join(".claude").join("agents"));
+        }
+        for dir in dirs {
+            let Ok(entries) = std::fs::read_dir(&dir) else {
+                continue;
+            };
+            for e in entries.flatten() {
+                let path = e.path();
+                if path.extension().is_none_or(|x| x != "md") {
+                    continue;
+                }
+                let Ok(text) = std::fs::read_to_string(&path) else {
+                    continue;
+                };
+                let Some(front) = frontmatter(&text) else {
+                    continue;
+                };
+                let get = |k: &str| {
+                    front.lines().find_map(|l| {
+                        let (key, val) = l.split_once(':')?;
+                        (key.trim() == k).then(|| val.trim().trim_matches(['"', '\'']).to_string())
+                    })
+                };
+                let Some(name) = get("name").filter(|n| !n.is_empty()) else {
+                    continue;
+                };
+                let mut description = get("description").unwrap_or_default();
+                if description.chars().count() > 300 {
+                    description = description.chars().take(300).collect::<String>() + "…";
+                }
+                out.retain(|a| a.name != name);
+                out.push(AgentInfo {
+                    name,
+                    description,
+                    model: get("model").filter(|m| !m.is_empty() && m != "inherit"),
+                });
+            }
+        }
+        out
+    })
+    .await
+    .unwrap_or_default()
+}
+
+fn frontmatter(text: &str) -> Option<&str> {
+    let rest = text.strip_prefix("---")?;
+    let end = rest.find("\n---")?;
+    Some(&rest[..end])
+}
