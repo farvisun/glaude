@@ -29,13 +29,13 @@ class UiState {
 	}
 
 	/** A new terminal starts in the folder of the conversation in focus. */
-	openTerminal(term: TermSpec = {}, title = "Terminal") {
+	openTerminal(term: TermSpec = {}, title = "Terminal", paneId?: string) {
 		if (!term.cwd) {
 			const tab = layout.focusedLeaf.active ? layout.tabs[layout.focusedLeaf.active] : undefined;
 			const conv = tab?.kind === "conversation" && tab.ref ? conversations.get(tab.ref) : undefined;
 			if (conv) term = { ...term, cwd: conv.cwd };
 		}
-		layout.openTab({ kind: "terminal", title, term });
+		layout.openTab({ kind: "terminal", title, term }, paneId);
 	}
 }
 

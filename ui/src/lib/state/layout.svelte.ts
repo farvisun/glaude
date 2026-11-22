@@ -40,7 +40,7 @@ export type Edge = "left" | "right" | "top" | "bottom";
 
 const KEY = "glaude.layout.v1";
 const SIDEBAR_KEY = "glaude.sidebar.v1";
-export const MAX_PANES = 4;
+export const MAX_PANES = 8;
 
 let seq = 0;
 export function uid(prefix: string): string {
@@ -220,6 +220,24 @@ class Layout {
 		if (from.tabs.length === 0 && from.id !== target.id) this.removeLeaf(from.id);
 		this.save();
 		return true;
+	}
+
+	/** Split `paneId` at `edge` into a new pane holding a Start tab; the
+	 *  next tab opened there replaces it. Returns the new pane's id. */
+	splitNew(paneId: string, edge: Edge): string | null {
+		if (this.leaves().length >= MAX_PANES) return null;
+		const target = this.findLeaf(paneId);
+		if (!target) return null;
+		const tabId = uid("tab");
+		this.tabs[tabId] = { id: tabId, kind: "welcome", title: "Start" };
+		const fresh = leaf([tabId], tabId);
+		const dir: Split["dir"] = edge === "left" || edge === "right" ? "horizontal" : "vertical";
+		const copy: Leaf = { ...target, tabs: [...target.tabs] };
+		const first = edge === "left" || edge === "top";
+		this.replace(target.id, { type: "split", id: uid("split"), dir, a: first ? fresh : copy, b: first ? copy : fresh });
+		this.focused = fresh.id;
+		this.save();
+		return fresh.id;
 	}
 
 	private replace(id: string, next: PaneNode) {

@@ -17,6 +17,7 @@
 	import { tabBadge } from "$lib/state/badges.svelte";
 	import { conversations } from "$lib/state/conversations.svelte";
 	import Spark from "$lib/components/conv/Spark.svelte";
+	import PaneMenu from "./PaneMenu.svelte";
 
 	let { pane, showExpand, onExpandSidebar }: { pane: Leaf; showExpand: boolean; onExpandSidebar?: () => void } =
 		$props();
@@ -50,18 +51,19 @@
 	function splitActive() {
 		if (!pane.active) return;
 		const tab = layout.tabs[pane.active];
-		// Splitting a lone tab: open a fresh welcome tab on the right.
-		if (pane.tabs.length === 1) {
-			const id = layout.openTab({ kind: "welcome", title: "Start" }, pane.id);
-			layout.splitWith(pane.id, "right", id);
-		} else if (tab) layout.splitWith(pane.id, "right", tab.id);
+		// Splitting a lone tab: a fresh Start pane on the right.
+		if (pane.tabs.length === 1) layout.splitNew(pane.id, "right");
+		else if (tab) layout.splitWith(pane.id, "right", tab.id);
 	}
 
 	const isFirstPane = $derived(layout.leaves()[0]?.id === pane.id);
 </script>
 
+<PaneMenu paneId={pane.id}>
+	{#snippet trigger(stripProps)}
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
+	{...stripProps}
 	class="bg-sidebar/60 border-border flex h-11 shrink-0 items-end gap-0.5 border-b px-1.5 {showExpand && isMac && isFirstPane
 		? 'ps-[78px]'
 		: ''}"
@@ -83,8 +85,11 @@
 			{#if tab}
 				{@const Icon = icons[tab.kind]}
 				{@const badge = tabBadge(tab)}
+				<PaneMenu paneId={pane.id} {tabId}>
+					{#snippet trigger(tabProps)}
 				<!-- svelte-ignore a11y_no_static_element_interactions -->
 				<div
+					{...tabProps}
 					class="group relative flex h-8 max-w-56 min-w-0 shrink-0 cursor-default items-center gap-1.5 rounded-t-md ps-2.5 pe-1 text-[13px]
 					{tabId === pane.active ? 'bg-background text-foreground' : 'text-muted-foreground hover:bg-accent/50'}"
 					draggable="true"
@@ -135,6 +140,8 @@
 						<X class="size-3" />
 					</button>
 				</div>
+					{/snippet}
+				</PaneMenu>
 			{/if}
 		{/each}
 		{#if dropIndex === pane.tabs.length && drag.tabId}
@@ -177,3 +184,5 @@
 		{/if}
 	</div>
 </div>
+	{/snippet}
+</PaneMenu>

@@ -3,6 +3,7 @@
 	import { drag } from "$lib/state/drag.svelte";
 	import TabStrip from "./TabStrip.svelte";
 	import TabBody from "./TabBody.svelte";
+	import PaneMenu from "./PaneMenu.svelte";
 
 	let { pane, showExpand, onExpandSidebar }: { pane: Leaf; showExpand: boolean; onExpandSidebar?: () => void } =
 		$props();
@@ -57,7 +58,10 @@
 	onpointerdown={() => layout.focus(pane.id)}
 >
 	<TabStrip {pane} {showExpand} {onExpandSidebar} />
+	<PaneMenu paneId={pane.id}>
+		{#snippet trigger(props)}
 	<div
+		{...props}
 		class="relative min-h-0 flex-1"
 		ondragover={onDragOver}
 		ondragleave={() => (hoverEdge = null)}
@@ -75,6 +79,8 @@
 			<div class="bg-primary/15 border-primary/60 pointer-events-none absolute z-20 rounded-md border-2 {overlay[hoverEdge]}"></div>
 		{/if}
 	</div>
+		{/snippet}
+	</PaneMenu>
 </section>
 
 <style>
