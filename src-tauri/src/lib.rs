@@ -1,5 +1,8 @@
 mod commands;
+mod conv;
+mod sink;
 
+use tauri::Manager;
 use tracing_subscriber::EnvFilter;
 
 pub fn run() {
@@ -21,7 +24,28 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![commands::app_info])
-        .run(tauri::generate_context!())
-        .expect("error while running Glaude");
+        .manage(conv::Convs::default())
+        .invoke_handler(tauri::generate_handler![
+            commands::app_info,
+            commands::default_cwd,
+            commands::pick_folder,
+            commands::pick_files,
+            commands::save_attachment,
+            commands::accounts_brief,
+            commands::sessions_list,
+            conv::conv_start,
+            conv::conv_send,
+            conv::conv_interrupt,
+            conv::conv_permission,
+            conv::conv_set_mode,
+            conv::conv_set_model,
+            conv::conv_close,
+        ])
+        .build(tauri::generate_context!())
+        .expect("error while building Glaude")
+        .run(|app, event| {
+            if let tauri::RunEvent::Exit = event {
+                conv::close_all(&app.state::<conv::Convs>());
+            }
+        });
 }
