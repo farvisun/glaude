@@ -5,6 +5,7 @@
 	import { Button } from "$lib/components/ui/button";
 	import { Input } from "$lib/components/ui/input";
 	import { Label } from "$lib/components/ui/label";
+	import { Switch } from "$lib/components/ui/switch";
 	import FolderOpen from "@lucide/svelte/icons/folder-open";
 	import { ui } from "$lib/state/ui.svelte";
 	import { permissionModes, startConversation, showError } from "$lib/state/sessions";
@@ -55,6 +56,23 @@
 	let starting = $state(false);
 	/** Claude: run the session as this agent ("" = the default). */
 	let agent = $state("");
+	// Work in a new git worktree (own branch and folder).
+	let isRepo = $state(false);
+	let inWorktree = $state(false);
+	let branchName = $state("");
+	$effect(() => {
+		const dir = cwd.trim();
+		isRepo = false;
+		if (!dir) return;
+		const t = setTimeout(() => {
+			call("git_info", { cwd: dir })
+				.then(() => {
+					if (cwd.trim() === dir) isRepo = true;
+				})
+				.catch(() => {});
+		}, 300);
+		return () => clearTimeout(t);
+	});
 	let agentList = $state<AgentInfo[]>([]);
 	$effect(() => {
 		if (!ui.newConversationOpen || provider !== "claude") return;
@@ -135,11 +153,29 @@
 			recent: [cwd, ...last.recent.filter((r) => r !== cwd)].slice(0, 8),
 		};
 		localStorage.setItem(LAST_KEY, JSON.stringify(next));
+		let dir = cwd.trim();
+		let title: string | undefined;
+		if (inWorktree && isRepo) {
+			try {
+				const name = branchName.trim() || `chat-${new Date().toISOString().slice(5, 16).replace(/[-T:]/g, "")}`;
+				const wt = await call<{ path: string; branch: string; setup?: string | null }>("worktree_add", { cwd: dir, name });
+				dir = wt.path;
+				title = wt.branch.replace(/^glaude\//, "");
+				if (wt.setup) ui.openTerminal({ cwd: wt.path, command: wt.setup }, "Worktree setup");
+			} catch (e) {
+				starting = false;
+				showError("Could not create the worktree", e);
+				return;
+			}
+		}
 		ui.newConversationOpen = false;
+		inWorktree = false;
+		branchName = "";
 		await startConversation({
 			provider,
 			account,
-			cwd: cwd.trim(),
+			title,
+			cwd: dir,
 			model: model || undefined,
 			permissionMode: mode,
 			agent: provider === "claude" && agent ? agent : undefined,
@@ -252,6 +288,21 @@
 					</Select.Content>
 				</Select.Root>
 			</div>
+
+			{#if isRepo}
+				<div class="flex flex-col gap-2">
+					<label class="flex items-start justify-between gap-3 text-[13px]">
+						<span>
+							<span class="font-medium">In a new worktree</span>
+							<span class="text-muted-foreground block text-xs">Its own branch and folder, so your checkout stays untouched.</span>
+						</span>
+						<Switch bind:checked={inWorktree} aria-label="In a new worktree" />
+					</label>
+					{#if inWorktree}
+						<Input bind:value={branchName} placeholder="Branch name (glaude/…)" aria-label="Branch name" class="font-mono text-[13px]" dir="ltr" />
+					{/if}
+				</div>
+			{/if}
 
 			<Dialog.Footer>
 				<Button type="button" variant="ghost" onclick={() => (ui.newConversationOpen = false)}>Cancel</Button>

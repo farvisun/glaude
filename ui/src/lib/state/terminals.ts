@@ -142,6 +142,8 @@ async function start(tabId: string, entry: Entry) {
 			onData: onData.raw,
 			onExit: onExit.raw,
 		});
+		// A project action: type its command into the new shell (once).
+		if (entry.spec.command && entry.generation === 1) await call("pty_write", { id, data: entry.spec.command + "\r" });
 	} catch (e) {
 		entry.exited = true;
 		showError("Could not start the terminal", e);
