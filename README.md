@@ -61,7 +61,19 @@ its own direction, keeps code left-to-right, and uses the Estedad font.
   archive sessions in the sidebar, with Undo; Cmd/Ctrl+K ranks by how often
   and how recently you opened them.
 - **Sidebar, tabs and splits**: up to eight panes; drag a tab to an edge, or
-  right-click a tab or pane to split it.
+  right-click a tab or pane to split it. Editor-style tabs show whether an
+  agent is working, needs you, or finished while you were elsewhere; they
+  scroll sideways with a list of all tabs when they don't fit.
+- **macOS menu bar**: Glaude, File, Edit, View, Conversation, Window and Help
+  menus with every action and its shortcut, and a status icon listing the
+  agents that are working or waiting for you (it stays when the window is
+  closed; Cmd+Q quits).
+- **Settings** (Cmd+,): appearance (theme, palette, interface size, density,
+  message width, code font), defaults for new conversations (tool, account,
+  model, effort, permissions, send key), background and alerts (keep agents
+  working after quitting, idle stop time, which notifications, sound),
+  terminal (font, size, cursor, shell) and a list of keyboard shortcuts.
+  Searchable; a bottom sheet of sections on narrow windows.
 - **Terminal tabs** (portable-pty + xterm.js), and *Open in terminal* to
   continue a session in the CLI's own TUI.
 - **Statusline**: model, effort, permission mode, folder, git branch,
