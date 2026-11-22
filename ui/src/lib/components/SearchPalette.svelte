@@ -8,6 +8,7 @@
 	import { detectDir } from "$lib/bidi";
 	import { basename, fmtAgo } from "$lib/format";
 	import type { Provider } from "$lib/types";
+	import { triage, sessionKey } from "$lib/state/triage.svelte";
 
 	interface Hit {
 		provider: Provider;
@@ -33,7 +34,25 @@
 	let seq = 0;
 
 	const titles = $derived(new Map(history.sessions.map((s) => [`${s.provider}:${s.id}`, s.title])));
-	const recent = $derived(history.sessions.slice(0, 12));
+	// Opened often and lately first; archived sessions stay out of "Recent".
+	const recent = $derived(
+		history.sessions
+			.filter((s) => !triage.isArchived(sessionKey(s)))
+			.map((s) => ({ s, score: triage.frecency(sessionKey(s), s.updated) }))
+			.sort((a, b) => b.score - a.score)
+			.slice(0, 12)
+			.map((x) => x.s),
+	);
+	const updatedOf = $derived(new Map(history.sessions.map((s) => [sessionKey(s), s.updated])));
+	// Search order, nudged by frecency: relevance rank counts most.
+	const ranked = $derived.by(() => {
+		if (hits.length < 2) return hits;
+		const top = Math.max(1, ...hits.map((h) => triage.frecency(`${h.provider}:${h.sessionId}`, updatedOf.get(`${h.provider}:${h.sessionId}`) ?? h.ts)));
+		return hits
+			.map((h, i) => ({ h, score: 1 / (1 + i * 0.35) + (0.6 * triage.frecency(`${h.provider}:${h.sessionId}`, updatedOf.get(`${h.provider}:${h.sessionId}`) ?? h.ts)) / top }))
+			.sort((a, b) => b.score - a.score)
+			.map((x) => x.h);
+	});
 
 	// Index status while the palette is open (the index updates in the background).
 	$effect(() => {
@@ -115,7 +134,7 @@
 			</div>
 		{:else}
 			<Command.Group heading="Matches">
-				{#each hits as h (h.provider + h.sessionId)}
+				{#each ranked as h (h.provider + h.sessionId)}
 					<Command.Item value={`${h.provider}:${h.sessionId}`} onSelect={() => pick(h.provider, h.sessionId, h.cwd)} class="items-start">
 						<span class="mt-1.5 size-2 shrink-0 rounded-full {h.provider === 'claude' ? 'bg-claude' : 'bg-codex'}"></span>
 						<div class="min-w-0 flex-1">
