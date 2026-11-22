@@ -134,6 +134,15 @@ Recorded in `fixtures/claude/{agents-background,workflow,task-stop}.ndjson`.
   `available_output_styles[]`, `output_style`. `--agent <name>` runs the main
   thread as that agent; `@agent-<name>` in a prompt becomes an agent mention.
 - `apply_flag_settings{settings:{outputStyle}}` changes the output style.
+- `file_suggestions{query}` → `{suggestions:[{path}], cwd}` for `@` mentions.
+  Folders end in `/`; results may include absolute paths from added
+  directories. The index warms up for a second or two after start (an empty
+  query lists the folder at once).
+- A subagent's final report reaches the UI only through the replayed
+  `<task-notification>` user message (`<result>…</result>`);
+  `task_notification.summary` is just "Agent … finished" unless
+  `summary_is_report`. Glaude reads the replay for the report but does not
+  show the message itself.
 - Panels: `get_context_usage` (categories, memoryFiles, mcpTools, agents),
   `mcp_status` (servers with status, tools, config), `mcp_reconnect{serverName}`,
   `mcp_toggle{serverName, enabled}`, `get_skills_dialog` (name, source, tokens,

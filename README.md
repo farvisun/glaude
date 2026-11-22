@@ -26,7 +26,21 @@ its own direction, keeps code left-to-right, and uses the Estedad font.
 - **Statusline**: model, effort, permission mode, folder, git branch,
   context %, cost, lines changed, 5-hour and weekly limits. Optionally runs
   your own Claude `statusLine.command` with the same input Claude Code gives it.
-- **Progress panel**: turn state, elapsed time, current tool, plan.
+- **Progress panel**: turn state, elapsed time, current tool, plan, and the
+  conversation's tasks.
+- **Claude agents and workflows**: each subagent is a card with its type,
+  live status, usage, steps and report; Workflow runs show their phases and
+  agents; background shells have an output viewer. Any task can be stopped.
+- **Questions and plans**: Claude's questions become a form (single or
+  multiple choice, other answer, previews); a finished plan can be approved
+  (auto-accept edits or ask) or sent back with feedback. Shift+Tab cycles the
+  permission mode, plan mode included.
+- **Rewind**: from any of your messages, undo Claude's file edits since then,
+  fork the conversation from there, or both.
+- **Session panel** (Claude): context usage, MCP servers (reconnect, turn
+  off), skills, agents, hooks and recent hook runs, memory files, output
+  style. `@` in the composer mentions agents and files; a new conversation
+  can run as a custom agent.
 - **Accounts** (a Rust port of mamadoo): Claude and Codex accounts with
   plan, limits, token usage, share/link to the central home, add with the
   tool's own login, rename, archive, delete. File-compatible with
