@@ -1,7 +1,7 @@
 // Tab badges: running / needs attention. Filled by conversation stores.
 import type { Tab } from "./layout.svelte";
 
-export type Badge = "running" | "attention" | null;
+export type Badge = "running" | "attention" | "unread" | null;
 
 class Badges {
 	byRef = $state<Record<string, Badge>>({});

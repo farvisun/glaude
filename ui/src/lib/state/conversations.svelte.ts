@@ -199,10 +199,25 @@ export class Conversation {
 		this.updateBadge();
 	}
 
+	/** Finished while its tab was not in view. */
+	unread = $state(false);
+
+	markUnread(v: boolean) {
+		if (this.unread === v) return;
+		this.unread = v;
+		this.updateBadge();
+	}
+
 	private updateBadge() {
 		badges.set(
 			this.id,
-			this.pendingPermissions > 0 ? "attention" : this.running || this.runningTasks.length > 0 ? "running" : null,
+			this.pendingPermissions > 0
+				? "attention"
+				: this.running || this.runningTasks.length > 0
+					? "running"
+					: this.unread
+						? "unread"
+						: null,
 		);
 	}
 }
