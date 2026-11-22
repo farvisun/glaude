@@ -1450,10 +1450,16 @@ name = "glaude-codex"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "chrono",
+ "dirs 6.0.0",
  "glaude-core",
+ "libc",
+ "parking_lot",
  "serde",
  "serde_json",
+ "tokio",
  "tracing",
+ "uuid",
 ]
 
 [[package]]
