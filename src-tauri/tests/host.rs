@@ -338,7 +338,10 @@ fn close_all_stops_running_agents() {
     let r = c.call("config", json!({"notify": false}));
     assert!(r.get("error").is_none(), "{r}");
     start(&mut c, "c1", &env.cwd());
-    c.call("send", json!({"convId": "c1", "text": "slow job", "attachments": []}));
+    c.call(
+        "send",
+        json!({"convId": "c1", "text": "slow job", "attachments": []}),
+    );
     c.wait_event(10, |e| e["type"] == "turn" && e["state"] != "idle");
     // Quitting with "keep agents working" off.
     c.call("close_all", json!({}));
