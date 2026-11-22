@@ -12,6 +12,8 @@
 	import { Button } from "$lib/components/ui/button";
 	import * as AlertDialog from "$lib/components/ui/alert-dialog";
 	import { onMount } from "svelte";
+	import SortTh from "./SortTh.svelte";
+	import { projects as userProjects } from "$lib/state/projects.svelte";
 
 	type Range = "7" | "30" | "90";
 	type Metric = "cost" | "tokens" | "time";
@@ -37,16 +39,37 @@
 	// Three recessive gridlines at round-ish steps.
 	const ticks = $derived(max > 0 ? [max / 3, (2 * max) / 3, max] : []);
 
-	const projects = $derived(
-		groupBy(recs, (r) => r.cwd)
-			.sort((a, b) => valueOf(b.totals) - valueOf(a.totals))
-			.slice(0, 12),
-	);
-	const convs = $derived(
-		groupBy(recs, (r) => r.convId)
-			.sort((a, b) => valueOf(b.totals) - valueOf(a.totals))
-			.slice(0, 10),
-	);
+	// Both tables sort by any column (click its header); the default is the
+	// measure picked above.
+	type Col = "name" | "turns" | "tokens" | "time" | "cost";
+	let projSort = $state<{ col: Col | null; desc: boolean }>({ col: null, desc: true });
+	let convSort = $state<{ col: Col | null; desc: boolean }>({ col: null, desc: true });
+	const flip = (cur: { col: Col | null; desc: boolean }, col: Col) => ({ col, desc: cur.col === col ? !cur.desc : col !== "name" });
+	type Group = { key: string; records: TurnRecord[]; totals: ReturnType<typeof totals> };
+	function sorted(list: Group[], s: { col: Col | null; desc: boolean }, name: (g: Group) => string): Group[] {
+		const v = (g: Group): number | string =>
+			s.col === "name"
+				? name(g).toLowerCase()
+				: s.col === "turns"
+					? g.totals.turns
+					: s.col === "tokens"
+						? g.totals.tokens
+						: s.col === "time"
+							? g.totals.durationMs
+							: s.col === "cost"
+								? g.totals.costUsd
+								: valueOf(g.totals);
+		return [...list].sort((a, b) => {
+			const x = v(a);
+			const y = v(b);
+			const c = typeof x === "string" ? x.localeCompare(y as string) : x - (y as number);
+			return s.col === null || s.desc ? -c : c;
+		});
+	}
+	// Grouped by the user's projects; folders outside them by folder.
+	const projectName = (g: Group) => userProjects.get(g.key)?.name ?? basename(g.key);
+	const projects = $derived(sorted(groupBy(recs, (r) => userProjects.of(r.cwd)?.id ?? r.cwd), projSort, projectName).slice(0, 12));
+	const convs = $derived(sorted(groupBy(recs, (r) => r.convId), convSort, (g) => title(g.records)).slice(0, 10));
 	const first = $derived(usage.records[0]?.ts ?? null);
 	const codexOnly = $derived(recs.length > 0 && recs.every((r) => r.provider === "codex"));
 
@@ -210,12 +233,17 @@
 					<h2 class="border-border border-b px-4 py-2.5 font-medium">By project</h2>
 					<table class="w-full text-[12.5px]">
 						<thead class="text-muted-foreground">
-							<tr><th class="px-4 py-1.5 text-start font-normal">Project</th><th class="text-end font-normal">Turns</th><th class="text-end font-normal">Tokens</th><th class="px-4 text-end font-normal">Cost</th></tr>
+							<tr>
+								<SortTh label="Project" class="px-4 py-1.5" active={projSort.col === "name"} desc={projSort.desc} onclick={() => (projSort = flip(projSort, "name"))} />
+								<SortTh label="Turns" end active={projSort.col === "turns"} desc={projSort.desc} onclick={() => (projSort = flip(projSort, "turns"))} />
+								<SortTh label="Tokens" end active={projSort.col === "tokens"} desc={projSort.desc} onclick={() => (projSort = flip(projSort, "tokens"))} />
+								<SortTh label="Cost" end class="px-4" active={projSort.col === "cost"} desc={projSort.desc} onclick={() => (projSort = flip(projSort, "cost"))} />
+							</tr>
 						</thead>
 						<tbody >
 							{#each projects as g (g.key)}
 								<tr class="border-border border-t">
-									<td class="max-w-0 truncate px-4 py-1.5" title={g.key}>{basename(g.key)}</td>
+									<td class="max-w-0 truncate px-4 py-1.5" title={userProjects.get(g.key)?.folders.join(", ") ?? g.key}>{projectName(g)}</td>
 									<td class="text-end">{g.totals.turns}</td>
 									<td class="text-end">{fmtTokens(g.totals.tokens)}</td>
 									<td class="px-4 text-end">{fmtCost(g.totals.costUsd)}</td>
@@ -230,7 +258,12 @@
 					<h2 class="border-border border-b px-4 py-2.5 font-medium">Top conversations</h2>
 					<table class="w-full text-[12.5px]">
 						<thead class="text-muted-foreground">
-							<tr><th class="px-4 py-1.5 text-start font-normal">Conversation</th><th class="text-end font-normal">Turns</th><th class="text-end font-normal">Time</th><th class="px-4 text-end font-normal">Cost</th></tr>
+							<tr>
+								<SortTh label="Conversation" class="px-4 py-1.5" active={convSort.col === "name"} desc={convSort.desc} onclick={() => (convSort = flip(convSort, "name"))} />
+								<SortTh label="Turns" end active={convSort.col === "turns"} desc={convSort.desc} onclick={() => (convSort = flip(convSort, "turns"))} />
+								<SortTh label="Time" end active={convSort.col === "time"} desc={convSort.desc} onclick={() => (convSort = flip(convSort, "time"))} />
+								<SortTh label="Cost" end class="px-4" active={convSort.col === "cost"} desc={convSort.desc} onclick={() => (convSort = flip(convSort, "cost"))} />
+							</tr>
 						</thead>
 						<tbody >
 							{#each convs as g (g.key)}

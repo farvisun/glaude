@@ -16,14 +16,23 @@
 	import { Button } from "$lib/components/ui/button";
 	import { Kbd } from "$lib/components/ui/kbd";
 	import Plus from "@lucide/svelte/icons/plus";
+	import SortMenu from "./SortMenu.svelte";
 	import Square from "@lucide/svelte/icons/square";
 	import ArrowUpRight from "@lucide/svelte/icons/arrow-up-right";
 
-	const rows = $derived(
-		Object.values(conversations.byId)
-			.map((conv) => ({ conv, step: stepOf(conv) }))
-			.sort(byUrgency),
-	);
+	type BoardSort = "urgency" | "recent" | "name";
+	const SORT_KEY = "glaude.board.sort";
+	let sort = $state<BoardSort>((localStorage.getItem(SORT_KEY) as BoardSort) || "urgency");
+	function setSort(v: BoardSort) {
+		sort = v;
+		localStorage.setItem(SORT_KEY, v);
+	}
+	const rows = $derived.by(() => {
+		const list = Object.values(conversations.byId).map((conv) => ({ conv, step: stepOf(conv) }));
+		if (sort === "name") return list.sort((a, b) => a.conv.title.localeCompare(b.conv.title, undefined, { sensitivity: "base" }));
+		if (sort === "recent") return list.sort((a, b) => b.conv.lastActivity - a.conv.lastActivity);
+		return list.sort(byUrgency);
+	});
 	const columns = $derived(
 		(
 			[
@@ -110,7 +119,18 @@
 			<span class="text-muted-foreground text-[13px]"
 				>{rows.length} open · <Kbd>⇧{mod}A</Kbd> jumps to the next one waiting for you</span
 			>
-			<Button size="sm" class="ms-auto" onclick={() => ui.openNewConversation()}><Plus /> New conversation</Button>
+			<span class="ms-auto">
+				<SortMenu
+					value={sort}
+					options={[
+						{ value: "urgency", label: "Most urgent" },
+						{ value: "recent", label: "Recent activity" },
+						{ value: "name", label: "Name" },
+					]}
+					onChange={setSort}
+				/>
+			</span>
+			<Button size="sm" onclick={() => ui.openNewConversation()}><Plus /> New conversation</Button>
 		</header>
 
 		{#if rows.length === 0}
