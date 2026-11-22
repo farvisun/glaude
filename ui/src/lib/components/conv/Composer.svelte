@@ -9,6 +9,11 @@
 	import Bot from "@lucide/svelte/icons/bot";
 	import FileIcon from "@lucide/svelte/icons/file";
 	import Folder from "@lucide/svelte/icons/folder";
+	import Archive from "@lucide/svelte/icons/archive";
+	import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
+	import { stash } from "$lib/state/stash.svelte";
+	import { fmtAgo } from "$lib/format";
+	import { isMac } from "$lib/state/prefs.svelte";
 
 	let {
 		running,
@@ -23,6 +28,8 @@
 		onSuggestFiles,
 		onCycleMode,
 		modeHint,
+		onSteer,
+		history = [],
 	}: {
 		running: boolean;
 		disabled?: boolean;
@@ -40,7 +47,69 @@
 		onCycleMode?: () => void;
 		/** Shown under the input, e.g. "plan mode on". */
 		modeHint?: string;
+		/** Cmd/Ctrl+Enter while a turn runs: send into it now. */
+		onSteer?: (text: string, attachments: Attachment[]) => void;
+		/** Earlier prompts, oldest first, for ArrowUp. */
+		history?: string[];
 	} = $props();
+
+	// ArrowUp/ArrowDown walk earlier prompts; the draft is kept aside.
+	let recall = $state<number | null>(null);
+	let kept = "";
+	function walk(dir: -1 | 1): boolean {
+		if (!history.length) return false;
+		if (recall === null) {
+			if (dir === 1) return false;
+			kept = text;
+			recall = history.length - 1;
+		} else {
+			const next = recall + dir;
+			if (next < 0) return true;
+			if (next >= history.length) {
+				recall = null;
+				text = kept;
+				return true;
+			}
+			recall = next;
+		}
+		text = history[recall];
+		queueMicrotask(() => {
+			if (!el) return;
+			el.setSelectionRange(text.length, text.length);
+			caret = text.length;
+		});
+		return true;
+	}
+
+	/** Quote a passage from a reply into the message (`> ` lines). */
+	export function insertQuote(passage: string) {
+		const quoted = passage
+			.trim()
+			.split("\n")
+			.map((l) => `> ${l}`)
+			.join("\n");
+		text = (text.trim() ? text.replace(/\s*$/, "\n\n") : "") + quoted + "\n\n";
+		queueMicrotask(() => {
+			el?.focus();
+			if (el) caret = el.selectionStart = el.selectionEnd = text.length;
+		});
+	}
+
+	function stashDraft() {
+		if (!text.trim() && !attachments.length) return;
+		stash.add(text, attachments);
+		text = "";
+		attachments = [];
+	}
+
+	function restore(id: string) {
+		const d = stash.take(id);
+		if (!d) return;
+		if (text.trim()) stash.add(text, attachments);
+		text = d.text;
+		attachments = d.attachments;
+		queueMicrotask(() => el?.focus());
+	}
 
 	let text = $state("");
 	let attachments = $state<Attachment[]>([]);
@@ -135,12 +204,14 @@
 		el?.focus();
 	}
 
-	function send() {
+	function send(steer = false) {
 		const t = text.trim();
 		if ((!t && attachments.length === 0) || disabled) return;
-		onSend(t, attachments);
+		if (steer && onSteer) onSteer(t, attachments);
+		else onSend(t, attachments);
 		text = "";
 		attachments = [];
+		recall = null;
 	}
 
 	function onKey(e: KeyboardEvent) {
@@ -181,9 +252,22 @@
 				return;
 			}
 		}
+		if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
+			e.preventDefault();
+			stashDraft();
+			return;
+		}
+		if (e.key === "ArrowUp" && !e.shiftKey && !e.altKey && el && !text.slice(0, el.selectionStart).includes("\n")) {
+			if (walk(-1)) e.preventDefault();
+			return;
+		}
+		if (e.key === "ArrowDown" && recall !== null && el && !text.slice(el.selectionEnd).includes("\n")) {
+			if (walk(1)) e.preventDefault();
+			return;
+		}
 		if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
 			e.preventDefault();
-			send();
+			send(running && (e.metaKey || e.ctrlKey));
 		}
 		if (e.key === "Escape" && running) onStop();
 	}
@@ -290,9 +374,12 @@
 		bind:value={text}
 		{dir}
 		rows="1"
-		{placeholder}
+		placeholder={running ? `Queue a message · ${isMac ? "⌘" : "Ctrl+"}↵ to send it now` : placeholder}
 		class="placeholder:text-muted-foreground block max-h-[280px] w-full resize-none bg-transparent px-3.5 pt-3 pb-1 text-[15px] leading-7 outline-none"
-		oninput={() => (caret = el?.selectionStart ?? text.length)}
+		oninput={() => {
+			caret = el?.selectionStart ?? text.length;
+			recall = null;
+		}}
 		onkeyup={() => (caret = el?.selectionStart ?? text.length)}
 		onclick={() => (caret = el?.selectionStart ?? text.length)}
 		onkeydown={onKey}
@@ -302,6 +389,34 @@
 	<div class="flex items-center gap-1 px-2 pb-2">
 		{#if onAttach}
 			<Button variant="ghost" size="icon-sm" aria-label="Attach files" onclick={attach}><Paperclip /></Button>
+		{/if}
+		{#if stash.items.length}
+			<DropdownMenu.Root>
+				<DropdownMenu.Trigger>
+					{#snippet child({ props })}
+						<Button {...props} variant="ghost" size="icon-sm" aria-label="Stashed drafts" title="Stashed drafts ({isMac ? '⌘' : 'Ctrl+'}S stashes)"
+							><Archive /></Button
+						>
+					{/snippet}
+				</DropdownMenu.Trigger>
+				<DropdownMenu.Content align="start" class="w-72">
+					<DropdownMenu.Label class="text-muted-foreground text-xs font-normal">Stashed drafts</DropdownMenu.Label>
+					{#each stash.items as d (d.id)}
+						<DropdownMenu.Item class="flex items-start gap-2" onclick={() => restore(d.id)}>
+							<span class="line-clamp-2 min-w-0 flex-1 text-[13px]" dir="auto">{d.text || "(attachments)"}</span>
+							<span class="text-muted-foreground shrink-0 text-[11px]">{fmtAgo(d.at)}</span>
+							<button
+								class="hover:text-foreground text-muted-foreground shrink-0"
+								aria-label="Delete draft"
+								onclick={(e) => {
+									e.stopPropagation();
+									stash.take(d.id);
+								}}><X class="size-3.5" /></button
+							>
+						</DropdownMenu.Item>
+					{/each}
+				</DropdownMenu.Content>
+			</DropdownMenu.Root>
 		{/if}
 		{#if modeHint}
 			<button
@@ -314,7 +429,13 @@
 			{#if running}
 				<Button variant="secondary" size="icon-sm" aria-label="Stop" onclick={onStop}><Square class="fill-current" /></Button>
 			{/if}
-			<Button size="icon-sm" aria-label="Send" disabled={disabled || (!text.trim() && !attachments.length)} onclick={send}>
+			<Button
+				size="icon-sm"
+				aria-label={running ? "Queue" : "Send"}
+				title={running ? "Queue (sent when the turn ends)" : "Send"}
+				disabled={disabled || (!text.trim() && !attachments.length)}
+				onclick={(e) => send(running && (e.metaKey || e.ctrlKey))}
+			>
 				<ArrowUp />
 			</Button>
 		</div>
