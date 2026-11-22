@@ -56,10 +56,28 @@ its own direction, keeps code left-to-right, and uses the Estedad font.
     "actions": [{ "name": "Dev", "command": "bun run dev" }]
   }
   ```
-- **Terminal drawer** under each conversation (Ctrl+\`), in its folder.
+- **Terminal panel** at the bottom of the window, as in VS Code: Ctrl+\`
+  shows or hides it, Ctrl+Shift+\` (or Cmd/Ctrl+T) adds a terminal in the
+  focused conversation's folder. Drag its edge to resize (or use the arrow
+  keys on it), maximize it, split terminals side by side (Cmd/Ctrl+\ inside
+  it), switch between them in the list on the side, and kill them. Shells
+  keep running while the panel is hidden.
 - **Triage**: pin, snooze (an hour, this evening, tomorrow, next week) or
   archive sessions in the sidebar, with Undo; Cmd/Ctrl+K ranks by how often
   and how recently you opened them.
+- **Session menu** (right-click a session in the sidebar): open, open in a
+  split right or down, new conversation in that project, pin, snooze,
+  archive, rename (Glaude's own name; the CLI's title is kept), copy the
+  session ID, reveal the transcript file, resume in the CLI's terminal UI,
+  and open the project's Changes.
+- **Proxies** (Settings → Network): save HTTP, HTTPS or SOCKS5 proxies (with
+  an optional login and a list of hosts to reach directly) and pick a
+  default for the app, per account and per project; each conversation can
+  use another one from the New conversation dialog or the statusline, which
+  restarts its agent on the same session. Claude, Codex and (optionally)
+  terminals get `HTTPS_PROXY`, `HTTP_PROXY`, `ALL_PROXY` and `NO_PROXY`.
+  *Check* reaches Anthropic and OpenAI through a proxy and shows the exit
+  address and latency. Claude Code does not support SOCKS proxies.
 - **Sidebar, tabs and splits**: up to eight panes; drag a tab to an edge, or
   right-click a tab or pane to split it. Editor-style tabs show whether an
   agent is working, needs you, or finished while you were elsewhere; they
@@ -93,9 +111,10 @@ its own direction, keeps code left-to-right, and uses the Estedad font.
   message width, code font), defaults for new conversations (tool, account,
   model, effort, permissions, send key), background and alerts (keep agents
   working after quitting, idle stop time, which notifications, sound),
-  terminal (font, size, cursor, shell) and a list of keyboard shortcuts.
+  terminal (font, size, cursor, shell), network (proxies), saved prompts
+  and a list of keyboard shortcuts.
   Searchable; a bottom sheet of sections on narrow windows.
-- **Terminal tabs** (portable-pty + xterm.js), and *Open in terminal* to
+- **Terminal tabs** too (portable-pty + xterm.js), and *Open in terminal* to
   continue a session in the CLI's own TUI.
 - **Statusline**: model, effort, permission mode, folder, git branch,
   context %, cost, lines changed, 5-hour and weekly limits. Optionally runs
