@@ -1,16 +1,12 @@
-//! Where mamadoo keeps account homes. Mirrors account_manager.py.
+//! Account homes for spawning the tools. Mirrors account_manager.py.
 
 use std::path::PathBuf;
 
-use glaude_core::env;
+use crate::tool::{Ctx, Kind};
 
 /// `$MAMADOO_DIR` or `~/.claude_multi`.
 pub fn root() -> PathBuf {
-    env::login_env()
-        .get("MAMADOO_DIR")
-        .filter(|v| !v.is_empty())
-        .map(PathBuf::from)
-        .unwrap_or_else(|| env::home_dir().join(".claude_multi"))
+    Ctx::from_env().root
 }
 
 /// `CLAUDE_CONFIG_DIR` for a Claude account; `None` for `default`, which
@@ -21,14 +17,12 @@ pub fn claude_config_dir(name: &str) -> Option<PathBuf> {
 
 /// The folder holding a Claude account's `projects/`, settings, etc.
 pub fn claude_home(name: &str) -> PathBuf {
-    claude_config_dir(name).unwrap_or_else(|| env::home_dir().join(".claude"))
+    let ctx = Ctx::from_env();
+    Kind::Claude.account_dir(&ctx, if name.is_empty() { "default" } else { name })
 }
 
 /// `CODEX_HOME` for a Codex account (always set, also for `default`).
 pub fn codex_home(name: &str) -> PathBuf {
-    if name == "default" || name.is_empty() {
-        env::home_dir().join(".codex")
-    } else {
-        env::home_dir().join(format!(".codex_{name}"))
-    }
+    let ctx = Ctx::from_env();
+    Kind::Codex.account_dir(&ctx, if name.is_empty() { "default" } else { name })
 }
