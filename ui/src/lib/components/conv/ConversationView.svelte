@@ -152,7 +152,7 @@
 </script>
 
 {#if conv}
-	<div class="flex h-full min-h-0">
+	<div class="@container flex h-full min-h-0">
 		<div class="flex min-w-0 flex-1 flex-col">
 			<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
 			<div class="scrollbar-thin min-h-0 flex-1 overflow-y-auto" bind:this={scroller} onscroll={onScroll} onclick={onClick}>
@@ -226,7 +226,7 @@
 			/>
 		</div>
 		{#if prefs.progressPanel}
-			<div class="hidden w-64 shrink-0 md:block">
+			<div class="hidden w-64 shrink-0 @3xl:block">
 				<ProgressPanel {conv} />
 			</div>
 		{/if}
