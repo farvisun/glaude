@@ -34,7 +34,7 @@
 
 <Command.Dialog bind:open={ui.paletteOpen} title="Command palette" description="Run an action, open an agent or use a saved prompt" class="sm:max-w-xl">
 	<Command.Input bind:value={query} placeholder="Type a command, an agent or a prompt…" dir="auto" />
-	<Command.List class="max-h-[60vh]">
+	<Command.List class="h-[min(60vh,26rem)] max-h-none">
 		<Command.Empty>Nothing matches.</Command.Empty>
 		{#if agents.length}
 			<Command.Group heading="Agents">

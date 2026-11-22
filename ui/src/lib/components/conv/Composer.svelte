@@ -438,8 +438,8 @@
 				<DropdownMenu.Content align="start" class="w-72">
 					<DropdownMenu.Label class="text-muted-foreground text-xs font-normal">Stashed drafts</DropdownMenu.Label>
 					{#each stash.items as d (d.id)}
-						<DropdownMenu.Item class="flex items-start gap-2" onclick={() => restore(d.id)}>
-							<span class="line-clamp-2 min-w-0 flex-1 text-[13px]" dir="auto">{d.text || "(attachments)"}</span>
+						<DropdownMenu.Item class="flex items-center gap-2" onclick={() => restore(d.id)}>
+							<span class="min-w-0 flex-1 truncate text-[13px]" dir="auto" title={d.text}>{d.text || "(attachments)"}</span>
 							<span class="text-muted-foreground shrink-0 text-[11px]">{fmtAgo(d.at)}</span>
 							<button
 								class="hover:text-foreground text-muted-foreground shrink-0"

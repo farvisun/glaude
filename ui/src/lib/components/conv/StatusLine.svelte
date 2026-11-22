@@ -146,10 +146,8 @@
 					<DropdownMenu.Label class="text-muted-foreground text-xs font-normal">Proxy for this conversation</DropdownMenu.Label>
 					<DropdownMenu.Item onclick={() => convActions.setProxy(conv, undefined)}>
 						<Check class={conv.proxy === undefined ? "" : "invisible"} />
-						<span class="flex min-w-0 flex-col">
-							<span class="truncate">Default · {fallback.proxy?.name ?? "No proxy"}</span>
-							{#if fallback.source}<span class="text-muted-foreground text-xs">From the {sourceLabel[fallback.source]}</span>{/if}
-						</span>
+						<span class="shrink-0">Default · {fallback.proxy?.name ?? "No proxy"}</span>
+						{#if fallback.source}<span class="text-muted-foreground min-w-0 truncate text-xs">{sourceLabel[fallback.source]}</span>{/if}
 					</DropdownMenu.Item>
 					{#each proxies.list as p (p.id)}
 						<DropdownMenu.Item onclick={() => convActions.setProxy(conv, p.id)}>

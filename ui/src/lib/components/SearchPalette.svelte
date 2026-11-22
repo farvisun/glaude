@@ -113,7 +113,7 @@
 	class="sm:max-w-2xl"
 >
 	<Command.Input bind:value={query} placeholder="Search past conversations…" dir="auto" />
-	<Command.List class="max-h-[60vh]">
+	<Command.List class="h-[min(60vh,28rem)] max-h-none">
 		{#if !query.trim()}
 			{#if recent.length}
 				<Command.Group heading="Recent">

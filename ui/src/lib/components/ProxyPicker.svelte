@@ -22,10 +22,8 @@
 	<Select.Trigger class={cls} aria-label="Proxy">{current}</Select.Trigger>
 	<Select.Content>
 		<Select.Item value="default" label={defaultLabel}>
-			<span class="flex min-w-0 flex-col">
-				<span>{defaultLabel}</span>
-				<span class="text-muted-foreground text-xs">{fallback.source ? `From the ${sourceLabel[fallback.source]}` : "No default is set"}</span>
-			</span>
+			<span class="shrink-0">{defaultLabel}</span>
+			<span class="text-muted-foreground min-w-0 truncate text-xs">{fallback.source ? sourceLabel[fallback.source] : "none set"}</span>
 		</Select.Item>
 		{#each proxies.list as p (p.id)}
 			<Select.Item value={p.id} label={p.name}>{p.name}</Select.Item>

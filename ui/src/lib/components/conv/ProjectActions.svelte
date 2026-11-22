@@ -35,10 +35,8 @@
 			{#each actions as a (a.name)}
 				<DropdownMenu.Item onclick={() => run(a)}>
 					<Play />
-					<span class="flex min-w-0 flex-col">
-						<span>{a.name}</span>
-						<span class="text-muted-foreground truncate font-mono text-[11px]">{a.command}</span>
-					</span>
+					<span class="shrink-0">{a.name}</span>
+					<span class="text-muted-foreground min-w-0 truncate font-mono text-[11px]" dir="ltr" title={a.command}>{a.command}</span>
 				</DropdownMenu.Item>
 			{/each}
 		</DropdownMenu.Content>
