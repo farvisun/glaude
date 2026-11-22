@@ -274,3 +274,27 @@ fn frontmatter(text: &str) -> Option<&str> {
     let end = rest.find("\n---")?;
     Some(&rest[..end])
 }
+
+/// Open a memory file (CLAUDE.md, rules, notes) or memory folder in the
+/// system's default app. Only Markdown files and folders inside a Claude
+/// config folder are opened.
+#[tauri::command]
+pub fn open_memory_path(app: tauri::AppHandle, path: String) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    let p = std::path::PathBuf::from(&path);
+    let meta = std::fs::metadata(&p).map_err(|_| "That file does not exist yet".to_string())?;
+    let in_claude_dir = p
+        .components()
+        .any(|c| c.as_os_str().to_string_lossy().starts_with(".claude"));
+    let ok = if meta.is_dir() {
+        in_claude_dir
+    } else {
+        p.extension().is_some_and(|e| e.eq_ignore_ascii_case("md"))
+    };
+    if !ok {
+        return Err("Only memory files and folders can be opened".into());
+    }
+    app.opener()
+        .open_path(path, None::<&str>)
+        .map_err(|e| e.to_string())
+}

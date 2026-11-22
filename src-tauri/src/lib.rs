@@ -104,6 +104,7 @@ pub fn run() {
             conv::claude_rewind_target,
             conv::task_output_file,
             commands::claude_agents,
+            commands::open_memory_path,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Glaude")

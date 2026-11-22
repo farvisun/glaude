@@ -302,6 +302,7 @@ const CONTROL_ALLOWED: &[&str] = &[
     "stop_task",
     "rewind_files",
     "apply_flag_settings",
+    "file_suggestions",
 ];
 
 #[tauri::command]
