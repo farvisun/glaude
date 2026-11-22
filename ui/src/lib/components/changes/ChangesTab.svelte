@@ -21,6 +21,7 @@
 	import { Textarea } from "$lib/components/ui/textarea";
 	import GitBranch from "@lucide/svelte/icons/git-branch";
 	import GitCommit from "@lucide/svelte/icons/git-commit-horizontal";
+	import ScanEye from "@lucide/svelte/icons/scan-eye";
 	import GitPullRequest from "@lucide/svelte/icons/git-pull-request";
 	import RefreshCw from "@lucide/svelte/icons/refresh-cw";
 	import Search from "@lucide/svelte/icons/search";
@@ -224,6 +225,16 @@
 				<Button variant="ghost" size="icon-sm" aria-label="Refresh" title="Refresh" onclick={refresh}><RefreshCw /></Button>
 				{#if info.managed}
 					<Button variant="ghost" size="sm" class="h-7" onclick={() => (removeOpen = true)}><Trash /> Remove worktree</Button>
+				{/if}
+				{#if targets[0] && info.dirty}
+					<Button
+						variant="outline"
+						size="sm"
+						class="h-7"
+						title="A read-only review of the uncommitted changes, beside {targets[0].title}"
+						onclick={() => void convActions.crossReview(targets[0])}
+						><ScanEye /> Ask {targets[0].provider === "claude" ? "Codex" : "Claude"} to review</Button
+					>
 				{/if}
 				<Button variant="outline" size="sm" class="h-7" disabled={!info.dirty} onclick={() => (commitOpen = true)}>
 					<GitCommit /> Commit{info.dirty ? ` (${info.dirty})` : ""}

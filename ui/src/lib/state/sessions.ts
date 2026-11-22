@@ -1,7 +1,8 @@
 // Starting conversations and the actions a conversation view can take.
 import { toast } from "svelte-sonner";
 import { call, channel, inTauri } from "$lib/ipc";
-import type { Attachment, ConvEvent, Item, Provider, QueuedMessage } from "$lib/types";
+import type { Attachment, Block, ConvEvent, FileDiff, Item, Provider, QueuedMessage } from "$lib/types";
+import { loadNewConv } from "./newconv";
 import { Conversation, conversations } from "./conversations.svelte";
 import { layout, uid } from "./layout.svelte";
 import { basename } from "$lib/format";
@@ -10,6 +11,7 @@ import { notifyPermission, notifyTurnDone, updateBadge, visible } from "./notify
 import { ui } from "./ui.svelte";
 import { triage } from "./triage.svelte";
 import { prefs } from "./prefs.svelte";
+import { usage } from "./usage.svelte";
 
 export interface StartSpec {
 	provider: Provider;
@@ -46,6 +48,26 @@ export function permissionModes(p: Provider): { value: string; label: string }[]
 			];
 }
 
+/** Text of rendered blocks, keeping line breaks (for copying and quoting). */
+export function blocksText(blocks: Block[]): string {
+	const div = document.createElement("div");
+	return blocks
+		.map((b) => {
+			div.innerHTML = b.html;
+			return (div.textContent ?? "").trim();
+		})
+		.filter(Boolean)
+		.join("\n\n");
+}
+
+function lastUserText(conv: Conversation): string {
+	for (let i = conv.items.length - 1; i >= 0; i--) {
+		const it = conv.items[i];
+		if (it.kind === "user") return blocksText(it.blocks);
+	}
+	return "";
+}
+
 let errorShown = new Set<string>();
 /** Show an error once as a toast (global rule: errors once, friendly). */
 export function showError(context: string, err: unknown) {
@@ -67,6 +89,7 @@ interface SavedConv {
 	title: string;
 	sessionId?: string;
 	sideOf?: string | null;
+	reviewOf?: string | null;
 }
 
 function loadSaved(): Record<string, SavedConv> {
@@ -82,7 +105,13 @@ function saveConv(conv: Conversation) {
 	if (!spec) return;
 	const all = loadSaved();
 	const { title: _t, resumeAt: _r, fork: _f, skipHistory: _s, ...base } = spec;
-	all[conv.id] = { spec: base, title: conv.title, sessionId: conv.session.sessionId ?? spec.resume, sideOf: conv.sideOf };
+	all[conv.id] = {
+		spec: base,
+		title: conv.title,
+		sessionId: conv.session.sessionId ?? spec.resume,
+		sideOf: conv.sideOf,
+		reviewOf: conv.reviewOf,
+	};
 	localStorage.setItem(SAVED_KEY, JSON.stringify(all));
 }
 
@@ -120,6 +149,7 @@ export async function restoreConversations() {
 		});
 		specs.set(id, s.spec);
 		conv.sideOf = s.sideOf ?? null;
+		conv.reviewOf = s.reviewOf ?? null;
 		if (live.has(id)) void attach(conv);
 		else conv.needsHistory = !!s.sessionId;
 	}
@@ -176,6 +206,7 @@ function onBatch(conv: Conversation, batch: ConvEvent[]) {
 			// A usage limit shows as a banner with "Resume at reset" instead.
 			if (ev.error && !/usage limit|limit reached|rate limit/i.test(ev.error)) showError("The turn ended with an error", ev.error);
 			history.refreshSoon();
+			if (conv.lastStat) usage.record(conv, conv.lastStat);
 			if (!visible(conv)) conv.markUnread(true);
 			notifyTurnDone(conv, ev.error);
 		} else if (ev.type === "item" && ev.item.kind === "permission" && ev.item.status === "pending") {
@@ -313,7 +344,8 @@ export const convActions = {
 		if (btw) return convActions.sideChat(conv, btw[1]?.trim() || undefined);
 		try {
 			if (!(await ensureAlive(conv))) return;
-			if (conv.items.every((i) => i.kind !== "user") && text) {
+			// The first message names the conversation (reviews keep their name).
+			if (!conv.reviewOf && conv.items.every((i) => i.kind !== "user") && text) {
 				const title = text.replace(/\s+/g, " ").slice(0, 48);
 				const tab = Object.values(layout.tabs).find((t) => t.ref === conv.id);
 				if (tab) layout.rename(tab.id, title);
@@ -381,6 +413,123 @@ export const convActions = {
 		side.sideOf = conv.id;
 		saveConv(side);
 		if (question) await convActions.send(side, question, []);
+	},
+	/** Run a turn again: Claude goes back to before the prompt and sends it
+	 *  again; Codex sends the prompt again. */
+	async retry(conv: Conversation, user: Extract<Item, { kind: "user" }>) {
+		const text = blocksText(user.blocks);
+		if (!text && !user.attachments.length) return;
+		if (conv.provider === "claude" && conv.session.sessionId) {
+			const ok = await convActions.rewindConversation(conv, user.id, text);
+			if (!ok) return;
+			conv.draft = null;
+		}
+		await convActions.send(conv, text, user.attachments);
+	},
+	/** A new conversation that continues from the end of a turn, beside this
+	 *  one. `nextUserId` is the prompt after that turn (none: the last turn). */
+	async forkAt(conv: Conversation, anchorId: string, nextUserId: string | null) {
+		if (!nextUserId) return convActions.sideChat(conv);
+		const prev = specs.get(conv.id);
+		const sid = conv.session.sessionId;
+		if (!prev || !sid || conv.provider !== "claude") {
+			toast("Only the latest turn can be forked here");
+			return;
+		}
+		try {
+			const target = await call<string | null>("claude_rewind_target", {
+				account: conv.account,
+				cwd: conv.cwd,
+				sessionId: sid,
+				userUuid: nextUserId,
+			});
+			if (!target) throw new Error("This point of the conversation was not found in its transcript.");
+			const tab = Object.values(layout.tabs).find((t) => t.kind === "conversation" && t.ref === conv.id);
+			const leaf = tab ? layout.leafOfTab(tab.id) : null;
+			const pane = (leaf && layout.splitNew(leaf.id, "right")) || undefined;
+			const fork = await startConversation(
+				{
+					...prev,
+					resume: sid,
+					resumeAt: target,
+					fork: true,
+					skipHistory: true,
+					model: conv.session.model ?? prev.model,
+					permissionMode: conv.session.permissionMode ?? prev.permissionMode,
+					title: `Fork · ${conv.title}`,
+				},
+				pane,
+			);
+			if (!fork) return;
+			const at = conv.items.findIndex((i) => i.id === anchorId);
+			fork.apply({ type: "reset", items: conv.items.slice(0, at + 1) });
+		} catch (e) {
+			showError("Could not fork the conversation", e);
+		}
+	},
+	/** Ask the other tool (Codex for Claude, Claude for Codex) to review the
+	 *  uncommitted changes, read-only, in a pane beside this conversation. */
+	async crossReview(conv: Conversation, files?: string[]) {
+		const other: Provider = conv.provider === "claude" ? "codex" : "claude";
+		const name = (p: Provider) => (p === "claude" ? "Claude Code" : "Codex");
+		let diff = "";
+		try {
+			const all = await call<FileDiff[]>("git_diff", { cwd: conv.cwd, source: "uncommitted" });
+			const picked = files?.length ? all.filter((d) => files.some((f) => d.path === f || d.path.endsWith(`/${f}`) || f.endsWith(`/${d.path}`))) : all;
+			diff = (picked.length ? picked : all).map((d) => d.diff).join("\n");
+		} catch {
+			/* not a git repository: the reviewer looks at the files itself */
+		}
+		if (!diff.trim() && !files?.length) {
+			toast("Nothing to review", { description: "There are no uncommitted changes in this folder." });
+			return;
+		}
+		const MAX = 60_000;
+		const task = lastUserText(conv);
+		const prompt = [
+			`Review the changes another coding agent (${name(conv.provider)}) just made in this repository. Do not modify any files.`,
+			task ? `\nThe task it was given:\n"""\n${task.slice(0, 4000)}\n"""` : "",
+			diff.trim()
+				? `\nThe uncommitted changes${diff.length > MAX ? " (cut short; run `git diff` for the rest)" : ""}:\n\n\`\`\`diff\n${diff.slice(0, MAX)}\n\`\`\``
+				: `\nFiles it changed: ${files?.join(", ")}. Run \`git diff\` or read them.`,
+			"\nReport concrete problems only, most severe first: bugs, missed requirements, broken edge cases, security issues and risky changes. For each one give the file and line, what goes wrong, and the fix. Say plainly if you found nothing important.",
+		].join("\n");
+		const defaults = loadNewConv();
+		const tab = Object.values(layout.tabs).find((t) => t.kind === "conversation" && t.ref === conv.id);
+		const leaf = tab ? layout.leafOfTab(tab.id) : null;
+		const pane = (leaf && layout.splitNew(leaf.id, "right")) || undefined;
+		const reviewer = await startConversation(
+			{
+				provider: other,
+				account: defaults.account[other] || "default",
+				cwd: conv.cwd,
+				model: defaults.model[other] || undefined,
+				permissionMode: other === "claude" ? "plan" : "read-only",
+				title: `Review · ${conv.title}`,
+			},
+			pane,
+		);
+		if (!reviewer) return;
+		reviewer.reviewOf = conv.id;
+		saveConv(reviewer);
+		await convActions.send(reviewer, prompt, []);
+	},
+	/** Put a review's findings into the reviewed conversation's composer. */
+	sendReviewBack(reviewer: Conversation) {
+		const origin = reviewer.reviewOf ? conversations.get(reviewer.reviewOf) : undefined;
+		if (!origin) {
+			toast("The reviewed conversation is closed");
+			return;
+		}
+		const last = [...reviewer.items].reverse().find((i) => i.kind === "assistant" && !i.parent);
+		if (!last || last.kind !== "assistant") {
+			toast("No review yet");
+			return;
+		}
+		const who = reviewer.provider === "claude" ? "Claude" : "Codex";
+		origin.draft = `${who} reviewed your changes:\n\n${blocksText(last.blocks)}\n\nFix the findings you agree with. For any you skip, say why.`;
+		const tab = Object.values(layout.tabs).find((t) => t.kind === "conversation" && t.ref === origin.id);
+		if (tab) layout.activate(tab.id);
 	},
 	/** Put the side chat's last answer into its parent's message as a quote. */
 	addToParent(side: Conversation) {
