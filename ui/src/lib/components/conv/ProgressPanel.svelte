@@ -2,6 +2,7 @@
 	import type { Conversation } from "$lib/state/conversations.svelte";
 	import type { Item, PlanStep, TurnState } from "$lib/types";
 	import PlanCard from "./PlanCard.svelte";
+	import ActivityTimeline from "./ActivityTimeline.svelte";
 	import { fmtDuration } from "$lib/format";
 	import Bot from "@lucide/svelte/icons/bot";
 	import Spark from "./Spark.svelte";
@@ -120,6 +121,11 @@
 		{#if conv.turn === "idle" && conv.lastTurnMs}
 			<div class="text-muted-foreground mt-1 text-xs">Last turn took {fmtDuration(conv.lastTurnMs)}</div>
 		{/if}
+	</section>
+
+	<section>
+		<h3 class="text-muted-foreground pb-1.5 text-xs font-medium">Timeline</h3>
+		<ActivityTimeline {conv} />
 	</section>
 
 	<section>

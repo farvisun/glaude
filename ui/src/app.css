@@ -371,21 +371,90 @@
 	unicode-bidi: isolate;
 }
 .prose-g pre {
+	position: relative;
 	direction: ltr;
 	text-align: left;
 	unicode-bidi: isolate;
 	background: var(--code-bg);
 	border: 1px solid var(--border);
 	border-radius: var(--radius);
-	padding: 0.8em 1em;
-	overflow-x: auto;
+	padding: 0;
 	font-size: 13px;
 	line-height: 1.55;
 }
 .prose-g pre code {
+	display: block;
 	background: none;
-	padding: 0;
+	padding: 0.8em 1em;
 	font-size: inherit;
+	border-radius: 0;
+	overflow-x: auto;
+}
+/* Bar added by actions/codeblocks.ts: language, wrap, copy. */
+.prose-g pre[data-cb] code {
+	padding-block-start: 0.55em;
+}
+.prose-g .cb-bar {
+	display: flex;
+	align-items: center;
+	gap: 0.25rem;
+	height: 1.85rem;
+	padding-inline: 0.85rem 0.35rem;
+	border-block-end: 1px solid var(--border);
+	font-family: var(--font-sans);
+	font-size: 11px;
+	color: var(--muted-foreground);
+	-webkit-user-select: none;
+	user-select: none;
+}
+.prose-g .cb-lang {
+	margin-inline-end: auto;
+	text-transform: lowercase;
+}
+.prose-g .cb-btn {
+	height: 1.35rem;
+	padding-inline: 0.45rem;
+	border-radius: 4px;
+	opacity: 0;
+	transition: opacity 120ms;
+}
+.prose-g pre:hover .cb-btn,
+.prose-g .cb-btn:focus-visible,
+.prose-g .cb-btn[aria-pressed="true"] {
+	opacity: 1;
+}
+.prose-g .cb-btn:hover,
+.prose-g .cb-btn[aria-pressed="true"] {
+	background: var(--accent);
+	color: var(--foreground);
+}
+@media (hover: none) {
+	.prose-g .cb-btn {
+		opacity: 1;
+	}
+}
+.prose-g pre.cb-wrap code {
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+.prose-g pre.cb-long:not(.cb-open) code {
+	max-height: 24lh;
+	overflow-y: hidden;
+	-webkit-mask-image: linear-gradient(to bottom, black 70%, transparent);
+	mask-image: linear-gradient(to bottom, black 70%, transparent);
+}
+.prose-g .cb-more {
+	display: block;
+	width: 100%;
+	padding-block: 0.35rem;
+	border-block-start: 1px solid var(--border);
+	font-family: var(--font-sans);
+	font-size: 12px;
+	color: var(--muted-foreground);
+}
+.prose-g .cb-more:hover {
+	color: var(--foreground);
+	background: var(--accent);
 }
 .prose-g table {
 	border-collapse: collapse;
@@ -543,4 +612,14 @@
 	.skeleton-shimmer {
 		animation: none;
 	}
+}
+
+/* Find in conversation (state/find.ts). */
+::highlight(find) {
+	background-color: color-mix(in oklab, var(--attention) 30%, transparent);
+	color: inherit;
+}
+::highlight(find-current) {
+	background-color: var(--attention);
+	color: var(--background);
 }

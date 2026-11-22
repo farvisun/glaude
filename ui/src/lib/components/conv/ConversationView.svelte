@@ -21,6 +21,19 @@
 	import Quote from "@lucide/svelte/icons/quote";
 	import { hitOf, markPaths } from "$lib/state/paths";
 	import { pathActions } from "$lib/state/open";
+	import { groupRuns, lastId } from "$lib/state/runs";
+	import { plainText } from "$lib/state/activity";
+	import { findMatches, highlight } from "$lib/state/find";
+	import { blocksText } from "$lib/state/sessions";
+	import RunCard from "./RunCard.svelte";
+	import TurnFooter from "./TurnFooter.svelte";
+	import FindBar from "./FindBar.svelte";
+	import PromptRail from "./PromptRail.svelte";
+	import ArrowDown from "@lucide/svelte/icons/arrow-down";
+	import ScanEye from "@lucide/svelte/icons/scan-eye";
+	import { untrack } from "svelte";
+	import { prompts as saved, slugOf } from "$lib/state/prompts.svelte";
+	import { usePrompt } from "$lib/state/commands.svelte";
 
 	let { convId, active }: { convId: string; active: boolean } = $props();
 
@@ -124,10 +137,16 @@
 		openLink(a.getAttribute("href") ?? "");
 	}
 
+	let farFromBottom = $state(false);
+	let railFrame = 0;
 	function onScroll() {
 		if (!scroller) return;
-		atBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 48;
+		const gap = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
+		atBottom = gap < 48;
+		farFromBottom = gap > 400;
 		if (scroller.scrollTop < 1200) void showEarlier();
+		cancelAnimationFrame(railFrame);
+		railFrame = requestAnimationFrame(updateActivePrompt);
 	}
 
 
@@ -237,6 +256,153 @@
 
 	const taskOf = (it: Item) => (it.kind === "tool" && conv ? conv.taskFor(it.id) : undefined);
 
+	// Rows: consecutive tool calls fold into one (Settings → Conversations).
+	const rows = $derived(groupRuns(shown, { compact: prefs.compactTools, hasTask: (id) => !!conv?.taskFor(id) }));
+	const rowOf = $derived.by(() => {
+		const m = new Map<string, string>();
+		for (const r of rows) {
+			if (r.kind === "run") for (const i of r.items) m.set(i.id, r.id);
+			else m.set(r.id, r.id);
+		}
+		return m;
+	});
+	let openRuns = $state<Record<string, boolean>>({});
+
+	// Turns: a prompt and everything up to the next one. The footer goes
+	// after the turn's last row.
+	type UserItem = Extract<Item, { kind: "user" }>;
+	const turns = $derived.by(() => {
+		const out = new Map<string, { user?: UserItem; nextUserId: string | null; last: boolean }>();
+		let user: UserItem | undefined;
+		let anchor: string | undefined;
+		for (const it of view.main) {
+			if (it.kind === "user") {
+				if (anchor) out.set(anchor, { user, nextUserId: it.id, last: false });
+				user = it;
+				anchor = undefined;
+			} else anchor = it.id;
+		}
+		if (anchor && conv && !conv.running) out.set(anchor, { user, nextUserId: null, last: true });
+		return out;
+	});
+	// The first row of each reply gets the agent's name.
+	const replyStarts = $derived.by(() => {
+		const set = new Set<string>();
+		let afterUser = true;
+		for (const r of rows) {
+			const isUser = r.kind === "item" && r.item.kind === "user";
+			if (!isUser && afterUser) set.add(r.id);
+			afterUser = isUser;
+		}
+		return set;
+	});
+
+	function turnText(anchorId: string, user?: UserItem): string {
+		if (!conv) return "";
+		const from = user ? conv.items.findIndex((i) => i.id === user.id) : 0;
+		const to = conv.items.findIndex((i) => i.id === anchorId);
+		return blocksText(
+			conv.items
+				.slice(Math.max(0, from), to + 1)
+				.filter((i): i is Extract<Item, { kind: "assistant" }> => i.kind === "assistant" && !i.parent)
+				.flatMap((i) => i.blocks),
+		);
+	}
+
+	// Prompts for the outline at the edge.
+	const prompts = $derived(
+		view.main.filter((i): i is UserItem => i.kind === "user").map((i) => ({ id: i.id, text: plainText(i.blocks) || "(attachment)" })),
+	);
+	let activePrompt = $state<string | null>(null);
+	function updateActivePrompt() {
+		if (!scroller || !content) return;
+		const top = scroller.scrollTop + 120;
+		let cur: string | null = null;
+		for (const el of content.querySelectorAll<HTMLElement>("[data-user]")) {
+			if (el.offsetTop <= top) cur = el.dataset.row ?? null;
+			else break;
+		}
+		activePrompt = cur ?? prompts[0]?.id ?? null;
+	}
+
+	// Scroll to an item: add older rows if needed, open its run, flash it.
+	let flashId = $state<string | null>(null);
+	async function reveal(itemId: string, smooth = true) {
+		if (!scroller || !content) return;
+		const idx = view.main.findIndex((x) => x.id === itemId);
+		if (idx < 0) return;
+		atBottom = false;
+		if (idx < startIdx) {
+			firstId = view.main[Math.max(0, idx - 2)].id;
+			await tick();
+		}
+		const rid = rowOf.get(itemId) ?? itemId;
+		if (rid.startsWith("run:") && !openRuns[rid]) {
+			openRuns[rid] = true;
+			await tick();
+		}
+		const el = content.querySelector<HTMLElement>(`[data-row="${CSS.escape(rid)}"]`);
+		el?.scrollIntoView({ block: "center", behavior: smooth ? "smooth" : "auto" });
+		flashId = rid;
+		setTimeout(() => {
+			if (flashId === rid) flashId = null;
+		}, 1400);
+	}
+	$effect(() => {
+		const r = ui.reveal;
+		if (!r || r.convId !== convId || !active || !conv || conv.loading || conv.needsHistory) return;
+		ui.reveal = null;
+		tick().then(() => reveal(r.itemId));
+	});
+
+	// "Jump to latest" with the number of new rows since you scrolled up.
+	let leftAt = $state<number | null>(null);
+	$effect(() => {
+		const n = untrack(() => view.main.length);
+		if (atBottom) leftAt = null;
+		else if (leftAt == null) leftAt = n;
+	});
+	const newCount = $derived(leftAt == null ? 0 : Math.max(0, view.main.length - leftAt));
+	function toBottom() {
+		scroller?.scrollTo({ top: scroller.scrollHeight, behavior: "smooth" });
+	}
+
+	// Find in this conversation (⌘F).
+	const findOpen = $derived(ui.findOpen === convId);
+	let findQuery = $state("");
+	let findIndex = $state(0);
+	let findBar = $state<{ focus: () => void }>();
+	const findIds = $derived(findOpen && findQuery.trim() ? findMatches(view.main, findQuery) : []);
+	$effect(() => {
+		void ui.findSeq;
+		if (findOpen) findBar?.focus();
+	});
+	function paintFind() {
+		if (!content) return;
+		const id = findIds[findIndex];
+		const rid = id ? (rowOf.get(id) ?? id) : null;
+		highlight(findOpen ? content : null, findQuery, rid ? content.querySelector(`[data-row="${CSS.escape(rid)}"]`) : null);
+	}
+	$effect(() => {
+		void findQuery;
+		if (!findOpen) return;
+		const ids = untrack(() => findIds);
+		findIndex = 0;
+		if (ids.length) void reveal(ids[0], false).then(paintFind);
+		else paintFind();
+	});
+	async function stepFind(dir: 1 | -1) {
+		if (!findIds.length) return;
+		findIndex = (findIndex + dir + findIds.length) % findIds.length;
+		await reveal(findIds[findIndex], false);
+		paintFind();
+	}
+	function closeFind() {
+		ui.findOpen = null;
+		highlight(null, "", null);
+		composer?.focus();
+	}
+
 	// Text put back after a rewind.
 	$effect(() => {
 		if (conv?.draft != null && composer) {
@@ -298,6 +464,17 @@
 {#if conv}
 	<div class="@container flex h-full min-h-0">
 		<div class="flex min-w-0 flex-1 flex-col">
+			{#if conv.reviewOf}
+				<div class="border-border bg-card/60 flex items-center gap-2 border-b px-4 py-1.5 text-xs">
+					<ScanEye class="text-muted-foreground size-3.5 shrink-0" />
+					<span class="text-muted-foreground min-w-0 flex-1 truncate"
+						>Read-only review of <span class="text-foreground" dir="auto">{conversations.get(conv.reviewOf)?.title ?? "a closed conversation"}</span></span
+					>
+					<Button variant="outline" size="sm" class="h-6 text-xs" disabled={conv.running} onclick={() => convActions.sendReviewBack(conv)}
+						>Send findings back</Button
+					>
+				</div>
+			{/if}
 			{#if conv.sideOf}
 				<div class="border-border bg-card/60 flex items-center gap-2 border-b px-4 py-1.5 text-xs">
 					<MessagesSquare class="text-muted-foreground size-3.5 shrink-0" />
@@ -307,6 +484,23 @@
 					>
 					<Button variant="outline" size="sm" class="h-6 text-xs" onclick={() => convActions.addToParent(conv)}>Add to chat</Button>
 				</div>
+			{/if}
+			<div class="relative flex min-h-0 flex-1 flex-col">
+			{#if findOpen}
+				<FindBar bind:this={findBar} bind:query={findQuery} count={findIds.length} index={findIndex} onStep={stepFind} onClose={closeFind} />
+			{/if}
+			{#if prompts.length >= 3}
+				<div class="hidden @2xl:contents">
+					<PromptRail {prompts} activeId={activePrompt} onPick={(id) => void reveal(id)} />
+				</div>
+			{/if}
+			{#if !atBottom && farFromBottom}
+				<button
+					class="bg-popover text-popover-foreground border-border hover:bg-accent absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1.5 rounded-full border px-3 py-1 text-[12px] shadow-md"
+					onclick={toBottom}
+				>
+					<ArrowDown class="size-3.5" /> Jump to latest{#if newCount}<span class="text-primary font-medium">· {newCount} new</span>{/if}
+				</button>
 			{/if}
 			<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
 			<div
@@ -347,21 +541,51 @@
 							>{startIdx} earlier {startIdx === 1 ? "message" : "messages"}</button
 						>
 					{/if}
-					{#each shown as item (item.id)}
-						<div class="cv-row">
-							<ItemView
-								{item}
-								{providerLabel}
-								provider={conv.provider}
-								thoughtFor={(id) => conv.thoughtFor(id)}
-								onDecide={decide}
-								task={taskOf(item)}
-								steps={view.steps[item.id]}
-								onStopTask={(id) => convActions.stopTask(conv, id)}
-								onTaskOutput={(id) => (ui.taskOutput = { convId: conv.id, taskId: id })}
-								onAnswer={(q, answers) => convActions.answerQuestion(conv, q, answers)}
-								onRewind={canRewind ? (it) => (ui.rewind = { convId: conv.id, itemId: it.id }) : undefined}
-							/>
+					{#snippet itemRow(item: Item)}
+						<ItemView
+							{item}
+							{providerLabel}
+							provider={conv.provider}
+							thoughtFor={(id) => conv.thoughtFor(id)}
+							onDecide={decide}
+							task={taskOf(item)}
+							steps={view.steps[item.id]}
+							onStopTask={(id) => convActions.stopTask(conv, id)}
+							onTaskOutput={(id) => (ui.taskOutput = { convId: conv.id, taskId: id })}
+							onAnswer={(q, answers) => convActions.answerQuestion(conv, q, answers)}
+							onRewind={canRewind ? (it) => (ui.rewind = { convId: conv.id, itemId: it.id }) : undefined}
+						/>
+					{/snippet}
+					{#each rows as row (row.id)}
+						{@const isUser = row.kind === "item" && row.item.kind === "user"}
+						{@const turn = turns.get(lastId(row))}
+						<div class="cv-row {flashId === row.id ? 'flash' : ''}" data-row={row.id} data-user={isUser ? "" : undefined}>
+							{#if replyStarts.has(row.id)}
+								<div class="text-muted-foreground mb-1.5 flex items-center gap-1.5 text-[12px] font-medium">
+									<span class="size-1.5 rounded-full" style="background: var(--{conv.provider})"></span>{providerLabel}
+								</div>
+							{/if}
+							{#if row.kind === "run"}
+								<RunCard items={row.items} {conv} bind:open={openRuns[row.id]} row={itemRow} />
+							{:else}
+								{@render itemRow(row.item)}
+							{/if}
+							{#if turn}
+								{@const anchorId = lastId(row)}
+								{@const stat = conv.turnStats[anchorId]}
+								<TurnFooter
+									{stat}
+									last={turn.last}
+									provider={conv.provider}
+									onCopy={() => void navigator.clipboard?.writeText(turnText(anchorId, turn.user))}
+									onRetry={turn.user && !conv.running ? () => void convActions.retry(conv, turn.user!) : undefined}
+									onFork={!conv.running && conv.session.sessionId && (turn.last || conv.provider === "claude")
+										? () => void convActions.forkAt(conv, anchorId, turn.nextUserId)
+										: undefined}
+									onReview={stat?.files.length ? () => void convActions.crossReview(conv, stat.files) : undefined}
+									onFiles={() => ui.openChanges(conv.cwd)}
+								/>
+							{/if}
 						</div>
 					{/each}
 					{#if conv.turn !== "idle" && conv.turn !== "waitingPermission"}
@@ -379,6 +603,7 @@
 						</button>
 					{/if}
 				</div>
+			</div>
 			</div>
 			<div class="mx-auto w-full max-w-(--msg-w) px-4 pb-1">
 				<LimitBanner limitedUntil={conv.limitedUntil} resumeAt={conv.resumeAt} onSchedule={(at) => convActions.schedule(conv, at)} />
@@ -404,6 +629,11 @@
 							: convActions.enqueue(conv, text, attachments)}
 					onSteer={(text, attachments) => convActions.steer(conv, text, attachments)}
 					getHistory={promptHistory}
+					savedPrompts={saved.forCwd(conv.cwd).map((p) => ({ id: p.id, slug: slugOf(p.name), name: p.name }))}
+					onPrompt={(id) => {
+						const p = saved.list.find((x) => x.id === id);
+						if (p) usePrompt(p, conv);
+					}}
 					onStop={() => convActions.interrupt(conv)}
 					onAttach={() => convActions.pickFiles()}
 					onPasteImage={(blob, name) => convActions.saveImage(blob, name)}
@@ -440,5 +670,23 @@
 	   rows are added in chunks instead (showEarlier). */
 	.cv-row {
 		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 0.35rem;
+		border-radius: var(--radius);
+	}
+	.cv-row.flash {
+		animation: row-flash 1.4s ease-out;
+	}
+	@keyframes row-flash {
+		0%,
+		30% {
+			background: color-mix(in oklab, var(--primary) 12%, transparent);
+			box-shadow: 0 0 0 6px color-mix(in oklab, var(--primary) 12%, transparent);
+		}
+		100% {
+			background: transparent;
+			box-shadow: 0 0 0 6px transparent;
+		}
 	}
 </style>

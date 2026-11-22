@@ -187,8 +187,8 @@ async function streamReply(ch: Chan, text: string) {
 	}
 	ch.push([
 		{ type: "item", item: { kind: "assistant", id: aid, blocks: [p(reply)], streaming: false } },
-		{ type: "session", info: { contextUsed: 48200, costUsd: 0.214, linesAdded: 4, linesRemoved: 1 } },
-		{ type: "turnDone", durationMs: 2600 },
+		{ type: "session", info: { contextUsed: 48200, costUsd: bumpCost(ch, 0.032), linesAdded: 4, linesRemoved: 1 } },
+		{ type: "turnDone", durationMs: 2600, tokens: { input: 1840, cached: 41200, output: 312 } },
 	]);
 }
 
@@ -504,12 +504,73 @@ function longItems(n: number): Item[] {
 	return items;
 }
 
+// Cumulative cost per conversation, like Claude's total_cost_usd.
+const costs = new WeakMap<Chan, number>();
+function bumpCost(ch: Chan, by: number): number {
+	const next = (costs.get(ch) ?? 0.182) + by;
+	costs.set(ch, next);
+	return Math.round(next * 1000) / 1000;
+}
+
+const codeSample = Array.from({ length: 40 }, (_, i) => (i === 0 ? "export function detectDir(text: string): Dir {" : i === 39 ? "}" : `\tconst step${i} = text.charCodeAt(${i}) + ${i};`)).join("\n");
+
+/** Many tool calls in a row, an edit, a test run and a reply with code. */
+async function demoWork(ch: Chan, text: string) {
+	await userTurn(ch, text);
+	const run = async (item: Item, ms: number, done: Partial<Item>) => {
+		ch.push([{ type: "turn", state: "tool" }, { type: "item", item }]);
+		await sleep(ms);
+		ch.push([{ type: "item", item: { ...item, ...done } as Item }]);
+	};
+	const t = (n: number) => "w" + Date.now() + n;
+	const tool = (id: string, name: string, title: string, input: unknown = {}) =>
+		({ kind: "tool", id, name, title, input, status: "running" }) as Item;
+	await run(tool(t(1), "Read", "ui/src/lib/bidi.ts", { file_path: "ui/src/lib/bidi.ts" }), 500, { status: "done", output: "export function detectDir…" } as Partial<Item>);
+	ch.push([{ type: "turn", state: "thinking" }, { type: "item", item: { kind: "reasoning", id: t(2), blocks: [p("Check the callers too.")], streaming: false } }]);
+	await run(tool(t(3), "Grep", "detectDir  ui/src", { pattern: "detectDir" }), 400, { status: "done", output: "ui/src/lib/bidi.ts:3\nui/src/lib/mock.ts:1" } as Partial<Item>);
+	await run(tool(t(4), "Read", "ui/src/lib/mock.ts", { file_path: "ui/src/lib/mock.ts" }), 400, { status: "done", output: "…" } as Partial<Item>);
+	await run(tool(t(5), "Edit", "ui/src/lib/bidi.ts", { file_path: "ui/src/lib/bidi.ts" }), 600, {
+		status: "done",
+		diffs: [{ path: "ui/src/lib/bidi.ts", kind: "update", diff: demoDiff, added: 3, removed: 1 }],
+	} as Partial<Item>);
+	await run(tool(t(6), "Bash", "bun run test -- bidi", { command: "bun run test -- bidi" }), slow.has(text) ? 90_000 : 2500, {
+		status: "done",
+		output: "✓ bidi.test.ts (12 tests)\nTests 12 passed",
+	} as Partial<Item>);
+	const aid = t(7);
+	ch.push([
+		{ type: "turn", state: "writing" },
+		{
+			type: "item",
+			item: {
+				kind: "assistant",
+				id: aid,
+				streaming: false,
+				blocks: [
+					p("Fixed the direction check: a line that starts with a Latin word but is mostly Persian is now right-to-left. Tests pass."),
+					{ html: `<pre dir="ltr"><code class="language-ts">${esc(codeSample)}</code></pre>`, dir: "ltr" },
+				],
+			},
+		},
+		{ type: "session", info: { costUsd: bumpCost(ch, 0.118), linesAdded: 3, linesRemoved: 1 } },
+		{ type: "turnDone", durationMs: 7400, tokens: { input: 5230, cached: 88400, output: 1460 } },
+	]);
+}
+const slow = new Set<string>();
+
+async function demoSlow(ch: Chan, text: string) {
+	slow.add(text);
+	await demoWork(ch, text);
+}
+
 async function demoLong(ch: Chan) {
 	ch.push([{ type: "reset", items: longItems(150) }]);
 }
 
 const demoScenarios: [RegExp, (ch: Chan, text: string) => Promise<void>][] = [
 	[/^demo long/i, demoLong],
+	[/^demo work/i, demoWork],
+	[/^demo slow/i, demoSlow],
 	[/^demo paths/i, demoPaths],
 	[/^demo limit/i, demoLimit],
 	[/^demo agents/i, demoAgents],

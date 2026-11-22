@@ -5,6 +5,9 @@
 	import QuestionCard from "./QuestionCard.svelte";
 	import PlanApprovalCard from "./PlanApprovalCard.svelte";
 	import Undo2 from "@lucide/svelte/icons/undo-2";
+	import Copy from "@lucide/svelte/icons/copy";
+	import Check from "@lucide/svelte/icons/check";
+	import { blocksText } from "$lib/state/sessions";
 	import Bot from "@lucide/svelte/icons/bot";
 	import Blocks from "./Blocks.svelte";
 	import ToolCard from "./ToolCard.svelte";
@@ -48,21 +51,34 @@
 	type Question = Extract<Item, { kind: "question" }>;
 
 	let thinkingOpen = $state(false);
+	let copied = $state(false);
 	const sparkColor = $derived(provider === "codex" ? "var(--codex)" : "var(--claude)");
 	// Read when the item stops streaming (the item object changes then).
 	const thoughtMs = $derived(item.kind === "reasoning" && !item.streaming ? (thoughtFor?.(item.id) ?? null) : null);
 </script>
 
 {#if item.kind === "user"}
-	<div class="group/user flex items-start justify-end gap-1">
-		{#if onRewind}
+	<div class="group/user flex items-start justify-end gap-0.5">
+		<span class="mt-1.5 flex items-center opacity-0 transition-opacity group-hover/user:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">
 			<button
-				class="text-muted-foreground hover:text-foreground hover:bg-accent mt-1.5 rounded-md p-1 opacity-0 transition-opacity group-hover/user:opacity-100 focus-visible:opacity-100"
-				aria-label="Rewind to here"
-				title="Rewind to before this message"
-				onclick={() => onRewind?.(item)}><Undo2 class="size-3.5" /></button
+				class="text-muted-foreground hover:text-foreground hover:bg-accent rounded-md p-1"
+				aria-label={copied ? "Copied" : "Copy message"}
+				title={copied ? "Copied" : "Copy message"}
+				onclick={() => {
+					void navigator.clipboard?.writeText(blocksText(item.blocks));
+					copied = true;
+					setTimeout(() => (copied = false), 1200);
+				}}>{#if copied}<Check class="size-3.5" />{:else}<Copy class="size-3.5" />{/if}</button
 			>
-		{/if}
+			{#if onRewind}
+				<button
+					class="text-muted-foreground hover:text-foreground hover:bg-accent rounded-md p-1"
+					aria-label="Edit and resend"
+					title="Edit and resend: go back to before this message"
+					onclick={() => onRewind?.(item)}><Undo2 class="size-3.5" /></button
+				>
+			{/if}
+		</span>
 		<div class="bg-user-bubble selectable max-w-[85%] rounded-2xl rounded-ee-md px-4 py-2.5">
 			<Blocks blocks={item.blocks} />
 			{#if item.attachments.length}
