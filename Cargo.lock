@@ -1518,6 +1518,7 @@ dependencies = [
  "ammonia",
  "anyhow",
  "dirs 6.0.0",
+ "libc",
  "memchr",
  "once_cell",
  "parking_lot",

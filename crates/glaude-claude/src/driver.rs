@@ -136,6 +136,9 @@ impl ClaudeSession {
             .spawn()
             .with_context(|| format!("starting {}", bin.display()))?;
         let pid = child.id();
+        if let Some(pid) = pid {
+            glaude_core::procs::register(pid);
+        }
         let mut stdin = child.stdin.take().expect("stdin");
         let stdout = child.stdout.take().expect("stdout");
         let mut stderr = child.stderr.take().expect("stderr");
@@ -221,6 +224,9 @@ impl ClaudeSession {
                         child.wait().await.ok()
                     }
                 };
+                if let Some(pid) = pid {
+                    glaude_core::procs::unregister(pid);
+                }
                 let code = status.and_then(|s| s.code());
                 let mut events = Vec::new();
                 let tail = err_tail.lock().trim().to_string();

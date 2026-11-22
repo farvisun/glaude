@@ -13,6 +13,7 @@ use glaude_core::env;
 use glaude_core::model::{
     Attachment, ConvEvent, Item, Limits, ModelChoice, SessionInfo, TurnState,
 };
+use glaude_core::procs;
 use parking_lot::Mutex;
 use serde_json::{json, Value};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -64,6 +65,10 @@ impl CodexServer {
         let mut child = cmd
             .spawn()
             .with_context(|| format!("starting {} app-server", bin.display()))?;
+        let pid = child.id();
+        if let Some(pid) = pid {
+            procs::register(pid);
+        }
         let mut stdin = child.stdin.take().expect("stdin");
         let stdout = child.stdout.take().expect("stdout");
         let (tx, mut rx) = mpsc::unbounded_channel::<String>();
@@ -118,6 +123,9 @@ impl CodexServer {
                         child.wait().await.ok().and_then(|s| s.code())
                     }
                 };
+                if let Some(pid) = pid {
+                    procs::unregister(pid);
+                }
                 if let Some(s) = weak.upgrade() {
                     *s.alive.lock() = false;
                     for (_, tx) in s.pending.lock().drain() {

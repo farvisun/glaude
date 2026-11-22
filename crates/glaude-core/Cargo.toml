@@ -17,3 +17,6 @@ pulldown-cmark = { version = "0.13", default-features = false, features = ["html
 syntect = { version = "5", default-features = false, features = ["default-syntaxes", "html", "regex-fancy"] }
 ammonia = "4"
 similar = "2"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

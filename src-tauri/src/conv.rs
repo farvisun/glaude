@@ -277,4 +277,7 @@ pub fn close_all(convs: &Convs, pool: &CodexPool) {
         }
     }
     pool.0.shutdown_blocking();
+    // Whatever the async shutdowns above don't reach before exit,
+    // including servers still in their startup handshake.
+    glaude_core::procs::kill_all(std::time::Duration::from_millis(800));
 }

@@ -9,6 +9,31 @@ mod statusline;
 use tauri::Manager;
 use tracing_subscriber::EnvFilter;
 
+/// SIGTERM/SIGINT/SIGHUP go through the normal exit path, so agent
+/// processes and PTYs are stopped instead of left running.
+fn exit_on_signals(app: tauri::AppHandle) {
+    #[cfg(unix)]
+    tauri::async_runtime::spawn(async move {
+        use tokio::signal::unix::{signal, SignalKind};
+        let (Ok(mut term), Ok(mut int), Ok(mut hup)) = (
+            signal(SignalKind::terminate()),
+            signal(SignalKind::interrupt()),
+            signal(SignalKind::hangup()),
+        ) else {
+            return;
+        };
+        tokio::select! {
+            _ = term.recv() => {}
+            _ = int.recv() => {}
+            _ = hup.recv() => {}
+        }
+        tracing::info!("signal received, shutting down");
+        app.exit(0);
+    });
+    #[cfg(not(unix))]
+    let _ = app;
+}
+
 pub fn run() {
     tracing_subscriber::fmt()
         .with_env_filter(
@@ -36,6 +61,7 @@ pub fn run() {
             // Bring the history index up to date in the background.
             let state = app.state::<search::SearchState>().inner().clone();
             state.0.refresh(app.handle().clone());
+            exit_on_signals(app.handle().clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

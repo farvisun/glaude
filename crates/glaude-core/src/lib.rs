@@ -9,4 +9,5 @@ pub mod env;
 pub mod git;
 pub mod lines;
 pub mod model;
+pub mod procs;
 pub mod render;
