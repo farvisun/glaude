@@ -3,7 +3,7 @@
 
 use std::collections::HashSet;
 use std::fs;
-use std::io::{BufRead, BufReader, Seek, SeekFrom};
+use std::io::{BufReader, Seek, SeekFrom};
 use std::path::Path;
 use std::time::Instant;
 
@@ -19,6 +19,8 @@ use crate::util::{
 use crate::Profile;
 
 pub const INDEX_VERSION: u64 = 2;
+/// Longest transcript line parsed (see `glaude_core::lines`).
+const LINE_CAP: usize = 32 << 20;
 
 pub fn plan(oauth: &Map<String, Value>) -> String {
     let s = |k: &str| oauth.get(k).map(|v| py_str(Some(v))).unwrap_or_default();
@@ -220,13 +222,17 @@ pub fn scan_file(
     f.seek(SeekFrom::Start(offset))?;
     let mut line = Vec::with_capacity(64 * 1024);
     loop {
-        line.clear();
-        let n = f.read_until(b'\n', &mut line)?;
-        if n == 0 || line.last() != Some(&b'\n') {
+        let l = glaude_core::lines::read_line_capped(&mut f, &mut line, LINE_CAP)?;
+        if !l.complete {
             break; // partially written line; picked up next time
         }
+        let n = l.consumed;
         offset += n as u64;
         pending += n as u64;
+        // Usage records are small; a line this long is tool output.
+        if l.truncated {
+            continue;
+        }
         if pending > 4_000_000 {
             on_bytes(pending);
             pending = 0;
