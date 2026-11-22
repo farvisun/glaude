@@ -2,6 +2,7 @@ mod accounts;
 mod commands;
 mod conv;
 mod pty;
+mod search;
 mod sink;
 mod statusline;
 
@@ -12,7 +13,7 @@ pub fn run() {
     tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| EnvFilter::new("glaude=info,glaude_lib=info,glaude_core=info,glaude_claude=info,glaude_codex=info,glaude_accounts=info")),
+                .unwrap_or_else(|_| EnvFilter::new("glaude=info,glaude_lib=info,glaude_core=info,glaude_claude=info,glaude_codex=info,glaude_accounts=info,glaude_search=info")),
         )
         .init();
 
@@ -30,6 +31,13 @@ pub fn run() {
         .manage(conv::Convs::default())
         .manage(conv::CodexPool::default())
         .manage(pty::Ptys::default())
+        .manage(search::SearchState::default())
+        .setup(|app| {
+            // Bring the history index up to date in the background.
+            let state = app.state::<search::SearchState>().inner().clone();
+            state.0.refresh(app.handle().clone());
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             commands::app_info,
             commands::default_cwd,
@@ -50,6 +58,9 @@ pub fn run() {
             commands::codex_sessions_list,
             commands::codex_models,
             statusline::statusline_render,
+            search::search_status,
+            search::search_refresh,
+            search::search_query,
             pty::pty_open,
             pty::pty_write,
             pty::pty_resize,

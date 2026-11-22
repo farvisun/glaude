@@ -17,6 +17,7 @@ glaude-core.workspace = true
 glaude-claude.workspace = true
 glaude-codex.workspace = true
 glaude-accounts.workspace = true
+glaude-search.workspace = true
 anyhow.workspace = true
 serde.workspace = true
 serde_json.workspace = true
