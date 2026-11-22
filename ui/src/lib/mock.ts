@@ -290,6 +290,8 @@ export const mockBackend: Record<string, (args: Record<string, unknown>) => unkn
 		}
 	},
 	pty_resize: async () => {},
+	statusline_render: async () =>
+		'<span style="color:#7fd18b">glaude</span> <span class="ansi-fg-8">|</span> 🌿 (master) <span class="ansi-fg-8">|</span> <span style="color:#f2c66d;font-weight:600">42%</span> <span class="ansi-fg-8">|</span> 🤖 Opus 5.5 (high)',
 	pty_close: async (args) => {
 		ptys.delete(args.id as string);
 	},

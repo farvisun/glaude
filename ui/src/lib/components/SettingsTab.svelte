@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { prefs, type Palette } from "$lib/state/prefs.svelte";
 	import { setMode, userPrefersMode } from "mode-watcher";
+	import { Switch } from "$lib/components/ui/switch";
 
 	const palettes: { id: Palette; name: string; note: string; swatch: string[] }[] = [
 		{ id: "lajevard", name: "Lajevard", note: "Lapis ink with a turquoise accent", swatch: ["#101a2e", "#5cc8bd", "#f2b544", "#e4eaf4"] },
@@ -40,6 +41,39 @@
 					</button>
 				{/each}
 			</div>
+		</section>
+
+		<section class="flex flex-col gap-3">
+			<h2 class="font-semibold">Conversations</h2>
+			<label class="flex items-start justify-between gap-4 text-[13px]">
+				<span>
+					<span class="font-medium">Use my Claude statusline script</span>
+					<span class="text-muted-foreground block">
+						Runs the <code>statusLine.command</code> from your Claude settings.json with the same input Claude Code gives it, and shows its
+						output under Claude conversations. Falls back to the built-in line if the script fails.
+					</span>
+				</span>
+				<Switch
+					checked={prefs.statuslineScript}
+					onCheckedChange={(v) => {
+						prefs.statuslineScript = v;
+						prefs.save();
+					}}
+				/>
+			</label>
+			<label class="flex items-start justify-between gap-4 text-[13px]">
+				<span>
+					<span class="font-medium">Progress panel</span>
+					<span class="text-muted-foreground block">Turn state, plan and current tool beside each conversation.</span>
+				</span>
+				<Switch
+					checked={prefs.progressPanel}
+					onCheckedChange={(v) => {
+						prefs.progressPanel = v;
+						prefs.save();
+					}}
+				/>
+			</label>
 		</section>
 	</div>
 </div>

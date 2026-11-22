@@ -9,10 +9,43 @@
 	import ProgressPanel from "./ProgressPanel.svelte";
 	import LoaderCircle from "@lucide/svelte/icons/loader-circle";
 	import { tick } from "svelte";
+	import { call } from "$lib/ipc";
 
 	let { convId, active }: { convId: string; active: boolean } = $props();
 
 	const conv = $derived(conversations.get(convId));
+
+	// Optional: the user's own Claude statusline script, re-run (debounced)
+	// whenever the session or limits change.
+	let scriptLine = $state<string | null>(null);
+	$effect(() => {
+		if (!conv || conv.provider !== "claude" || !prefs.statuslineScript) {
+			scriptLine = null;
+			return;
+		}
+		const s = conv.session;
+		const input = {
+			account: conv.account || "default",
+			cwd: conv.cwd,
+			sessionId: s.sessionId ?? null,
+			model: s.model ?? null,
+			effort: s.effort ?? null,
+			version: s.version ?? null,
+			contextUsed: s.contextUsed ?? null,
+			contextWindow: s.contextWindow ?? null,
+			costUsd: s.costUsd ?? null,
+			linesAdded: s.linesAdded ?? null,
+			linesRemoved: s.linesRemoved ?? null,
+			fiveHour: conv.limits.fiveHour ?? null,
+			week: conv.limits.week ?? null,
+		};
+		const t = setTimeout(() => {
+			call<string | null>("statusline_render", { input })
+				.then((html) => (scriptLine = html))
+				.catch(() => (scriptLine = null));
+		}, 300);
+		return () => clearTimeout(t);
+	});
 	let scroller = $state<HTMLDivElement>();
 	let atBottom = $state(true);
 	let composer = $state<{ focus: () => void }>();
@@ -102,6 +135,7 @@
 			<StatusLine
 				{conv}
 				{modes}
+				{scriptLine}
 				onMode={(m) => convActions.setMode(conv, m)}
 				onModel={(m) => convActions.setModel(conv, m)}
 			/>
