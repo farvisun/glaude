@@ -1,8 +1,8 @@
 // Mock backend for running the UI in a plain browser (vite dev, Playwright).
 // It plays a scripted Persian/English session so layout, bidi and streaming
 // can be checked without spawning real agents.
-import type { AppInfo, MockChannel } from "./ipc";
-import type { Block, ConvEvent, Item, TaskInfo } from "./types";
+import { MockChannel, type AppInfo } from "./ipc";
+import type { Block, ConvEvent, Item, QueuedMessage, TaskInfo } from "./types";
 import { detectDir } from "./bidi";
 
 type Chan = MockChannel<ConvEvent[]>;
@@ -396,7 +396,44 @@ async function demoPlan(ch: Chan, text: string) {
 	ch.push([{ type: "item", item }, { type: "turn", state: "waitingPermission" }]);
 }
 
+async function demoLimit(ch: Chan) {
+	ch.push([{ type: "turn", state: "requesting" }]);
+	await sleep(300);
+	const until = new Date(Date.now() + 2 * 3600e3).toISOString();
+	ch.push([
+		{ type: "turnDone", durationMs: 300, error: "You've hit your usage limit. Resets in 2 hours." },
+		{ type: "schedule", limitedUntil: until },
+	]);
+}
+
+// Like the host: messages queued during a turn go out when it ends.
+const mockQueues = new Map<string, QueuedMessage[]>();
+const busy = new Set<string>();
+function hostChannel(convId: string, ch: Chan): Chan {
+	const proxy = new MockChannel<ConvEvent[]>();
+	proxy.push = (batch: ConvEvent[]) => {
+		ch.push(batch);
+		for (const e of batch) {
+			if (e.type === "turn" && e.state !== "idle" && e.state !== "waitingPermission") busy.add(convId);
+			if (e.type === "turnDone") {
+				busy.delete(convId);
+				const q = mockQueues.get(convId) ?? [];
+				if (q.length && !e.error) {
+					const [next, ...rest] = q;
+					mockQueues.set(convId, rest);
+					setTimeout(() => {
+						ch.push([{ type: "queue", items: rest }]);
+						void mockBackend.conv_send({ convId, text: next.text, attachments: next.attachments ?? [] });
+					}, 50);
+				}
+			}
+		}
+	};
+	return proxy;
+}
+
 const demoScenarios: [RegExp, (ch: Chan, text: string) => Promise<void>][] = [
+	[/^demo limit/i, demoLimit],
 	[/^demo agents/i, demoAgents],
 	[/^demo workflow/i, demoWorkflow],
 	[/^demo ask/i, demoQuestion],
@@ -499,7 +536,7 @@ export const mockBackend: Record<string, (args: Record<string, unknown>) => unkn
 		codex: { path: "/opt/homebrew/bin/codex", version: "codex-cli 0.171.0" },
 	}),
 	conv_start: async (args) => {
-		const ch = args.onEvent as Chan;
+		const ch = hostChannel(args.convId as string, args.onEvent as Chan);
 		chans.set(args.convId as string, ch);
 		const spec = args.spec as { provider: string; cwd: string; resume?: string; skipHistory?: boolean };
 		await sleep(80);
@@ -549,6 +586,29 @@ export const mockBackend: Record<string, (args: Record<string, unknown>) => unkn
 		return null;
 	},
 	conv_interrupt: async () => null,
+	host_list: async () => [],
+	conv_attach: async () => {
+		throw new Error("not running");
+	},
+	conv_queue: async (args) => {
+		const convId = args.convId as string;
+		const items = args.items as QueuedMessage[];
+		mockQueues.set(convId, items);
+		chans.get(convId)?.push([{ type: "queue", items }]);
+		if (!busy.has(convId) && items.length) {
+			const [next, ...rest] = items;
+			mockQueues.set(convId, rest);
+			chans.get(convId)?.push([{ type: "queue", items: rest }]);
+			void mockBackend.conv_send({ convId, text: next.text, attachments: next.attachments ?? [] });
+		}
+		return null;
+	},
+	conv_schedule: async (args) => {
+		const ch = chans.get(args.convId as string);
+		const at = (args.resumeAt as string | null) ?? undefined;
+		ch?.push([{ type: "schedule", limitedUntil: at ? new Date(Date.now() + 2 * 3600e3).toISOString() : undefined, resumeAt: at }]);
+		return null;
+	},
 	conv_permission: async (args) => {
 		const ch = chans.get(args.convId as string);
 		const allow = String(args.optionId).startsWith("allow");

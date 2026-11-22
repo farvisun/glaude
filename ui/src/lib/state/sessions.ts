@@ -1,7 +1,7 @@
 // Starting conversations and the actions a conversation view can take.
 import { toast } from "svelte-sonner";
 import { call, channel, inTauri } from "$lib/ipc";
-import type { Attachment, ConvEvent, Item, Provider } from "$lib/types";
+import type { Attachment, ConvEvent, Item, Provider, QueuedMessage } from "$lib/types";
 import { Conversation, conversations } from "./conversations.svelte";
 import { layout, uid } from "./layout.svelte";
 import { basename } from "$lib/format";
@@ -57,15 +57,120 @@ export function showError(context: string, err: unknown) {
 
 const specs = new Map<string, StartSpec>();
 
+// Conversation tabs survive a restart: each one's start spec, title and
+// session id are saved, so it can reattach to the host or resume.
+const SAVED_KEY = "glaude.convs.v1";
+interface SavedConv {
+	spec: StartSpec;
+	title: string;
+	sessionId?: string;
+}
+
+function loadSaved(): Record<string, SavedConv> {
+	try {
+		return JSON.parse(localStorage.getItem(SAVED_KEY) ?? "{}") as Record<string, SavedConv>;
+	} catch {
+		return {};
+	}
+}
+
+function saveConv(conv: Conversation) {
+	const spec = specs.get(conv.id);
+	if (!spec) return;
+	const all = loadSaved();
+	const { title: _t, resumeAt: _r, fork: _f, skipHistory: _s, ...base } = spec;
+	all[conv.id] = { spec: base, title: conv.title, sessionId: conv.session.sessionId ?? spec.resume };
+	localStorage.setItem(SAVED_KEY, JSON.stringify(all));
+}
+
+function forgetConv(id: string) {
+	const all = loadSaved();
+	if (!(id in all)) return;
+	delete all[id];
+	localStorage.setItem(SAVED_KEY, JSON.stringify(all));
+}
+
+/** Bring back the conversation tabs of the last run: attach to the ones the
+ *  host still runs (they may have kept working), and resume the others from
+ *  their transcript when they are shown. */
+export async function restoreConversations() {
+	const saved = loadSaved();
+	const tabs = Object.values(layout.tabs).filter((t) => t.kind === "conversation" && t.ref);
+	let live = new Set<string>();
+	try {
+		const list = await call<{ convId: string }[]>("host_list");
+		live = new Set(list.map((l) => l.convId));
+	} catch {
+		/* the host starts with the first conversation */
+	}
+	for (const tab of tabs) {
+		const id = tab.ref as string;
+		const s = saved[id];
+		if (!s || conversations.get(id)) continue;
+		const conv = conversations.add({
+			id,
+			provider: s.spec.provider,
+			account: s.spec.account,
+			cwd: s.spec.cwd,
+			title: s.title,
+			sessionId: s.sessionId,
+		});
+		specs.set(id, s.spec);
+		if (live.has(id)) void attach(conv);
+		else conv.needsHistory = !!s.sessionId;
+	}
+	// Drop saved conversations whose tab is gone.
+	const open = new Set(tabs.map((t) => t.ref));
+	const kept = Object.fromEntries(Object.entries(saved).filter(([id]) => open.has(id)));
+	localStorage.setItem(SAVED_KEY, JSON.stringify(kept));
+}
+
+async function attach(conv: Conversation) {
+	conv.loading = true;
+	try {
+		const ch = await channel<ConvEvent[]>((batch) => onBatch(conv, batch));
+		await call("conv_attach", { convId: conv.id, onEvent: ch.raw });
+		conv.alive = true;
+	} catch {
+		conv.loading = false;
+		conv.needsHistory = !!conv.session.sessionId;
+	}
+}
+
+/** A restored tab is shown: load its history (this resumes the session). */
+export async function loadHistory(conv: Conversation) {
+	if (!conv.needsHistory) return;
+	conv.needsHistory = false;
+	const prev = specs.get(conv.id);
+	const sid = conv.session.sessionId;
+	if (!prev || !sid) return;
+	conv.loading = true;
+	await connect(conv, { ...prev, resume: sid, fork: false, skipHistory: false });
+}
+
+/** The host went away (crash, update): everything restarts on demand. */
+export function hostLost() {
+	let any = false;
+	for (const conv of Object.values(conversations.byId)) {
+		if (conv.alive) any = true;
+		conv.alive = false;
+		conv.turn = "idle";
+	}
+	if (any) toast.warning("The agent host stopped", { description: "Conversations restart when you send a message." });
+}
+
 function onBatch(conv: Conversation, batch: ConvEvent[]) {
 	for (const ev of batch) {
+		const prevSid = conv.session.sessionId;
 		conv.apply(ev);
+		if (ev.type === "session" && ev.info.sessionId && ev.info.sessionId !== prevSid) saveConv(conv);
 		if (ev.type === "notice") {
 			if (ev.level === "error") showError(conv.provider === "claude" ? "Claude stopped" : "Codex stopped", ev.text);
 			else if (ev.level === "warning") toast.warning(ev.text);
 			else toast(ev.text);
 		} else if (ev.type === "turnDone") {
-			if (ev.error) showError("The turn ended with an error", ev.error);
+			// A usage limit shows as a banner with "Resume at reset" instead.
+			if (ev.error && !/usage limit|limit reached|rate limit/i.test(ev.error)) showError("The turn ended with an error", ev.error);
 			history.refreshSoon();
 			notifyTurnDone(conv, ev.error);
 		} else if (ev.type === "item" && ev.item.kind === "permission" && ev.item.status === "pending") {
@@ -83,6 +188,7 @@ async function connect(conv: Conversation, spec: StartSpec): Promise<boolean> {
 		const ch = await channel<ConvEvent[]>((batch) => onBatch(conv, batch));
 		await call("conv_start", { convId: conv.id, spec, onEvent: ch.raw });
 		conv.alive = true;
+		saveConv(conv);
 		return true;
 	} catch (e) {
 		conv.loading = false;
@@ -204,10 +310,45 @@ export const convActions = {
 				const tab = Object.values(layout.tabs).find((t) => t.ref === conv.id);
 				if (tab) layout.rename(tab.id, title);
 				conv.title = title;
+				saveConv(conv);
 			}
 			await call("conv_send", { convId: conv.id, text, attachments });
 		} catch (e) {
 			showError("Message not sent", e);
+		}
+	},
+	/** Send into the running turn now (Codex steers; Claude takes it mid-turn). */
+	async steer(conv: Conversation, text: string, attachments: Attachment[]) {
+		conv.lastActivity = Date.now();
+		try {
+			if (!(await ensureAlive(conv))) return;
+			await call("conv_send", { convId: conv.id, text, attachments, steer: true });
+		} catch (e) {
+			showError("Message not sent", e);
+		}
+	},
+	/** Replace the queue of messages sent when the turn ends. */
+	async setQueue(conv: Conversation, items: QueuedMessage[]) {
+		const before = conv.queue;
+		conv.queue = items;
+		try {
+			if (!(await ensureAlive(conv))) throw new Error("The conversation is not running");
+			await call("conv_queue", { convId: conv.id, items });
+		} catch (e) {
+			conv.queue = before;
+			showError("Could not update the queue", e);
+		}
+	},
+	async enqueue(conv: Conversation, text: string, attachments: Attachment[]) {
+		await convActions.setQueue(conv, [...conv.queue, { id: uid("q"), text, attachments }]);
+	},
+	/** Continue at `at` (RFC 3339), or cancel with null. */
+	async schedule(conv: Conversation, at: string | null) {
+		try {
+			if (!(await ensureAlive(conv))) throw new Error("The conversation is not running");
+			await call("conv_schedule", { convId: conv.id, resumeAt: at });
+		} catch (e) {
+			showError("Could not schedule the resume", e);
 		}
 	},
 	async interrupt(conv: Conversation) {
@@ -348,6 +489,7 @@ export const convActions = {
 	},
 	async close(convId: string) {
 		specs.delete(convId);
+		forgetConv(convId);
 		try {
 			await call("conv_close", { convId });
 		} catch {

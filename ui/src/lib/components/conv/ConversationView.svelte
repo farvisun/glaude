@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { conversations } from "$lib/state/conversations.svelte";
 	import { prefs } from "$lib/state/prefs.svelte";
-	import { convActions, openLink, permissionModes } from "$lib/state/sessions";
+	import { convActions, loadHistory, openLink, permissionModes } from "$lib/state/sessions";
 	import type { Item } from "$lib/types";
 	import ItemView from "./ItemView.svelte";
 	import Composer from "./Composer.svelte";
@@ -13,6 +13,9 @@
 	import { ui } from "$lib/state/ui.svelte";
 	import { groupItems } from "$lib/state/group";
 	import Spark from "./Spark.svelte";
+	import QueuePanel from "./QueuePanel.svelte";
+	import LimitBanner from "./LimitBanner.svelte";
+	import Quote from "@lucide/svelte/icons/quote";
 
 	let { convId, active }: { convId: string; active: boolean } = $props();
 
@@ -51,7 +54,55 @@
 	});
 	let scroller = $state<HTMLDivElement>();
 	let atBottom = $state(true);
-	let composer = $state<{ focus: () => void; setText: (t: string) => void }>();
+	let composer = $state<{ focus: () => void; setText: (t: string) => void; insertQuote: (t: string) => void }>();
+
+	// Earlier prompts for ArrowUp, oldest first.
+	const promptHistory = $derived.by(() => {
+		if (!conv) return [];
+		const out: string[] = [];
+		const div = typeof document !== "undefined" ? document.createElement("div") : null;
+		for (const it of conv.items) {
+			if (it.kind !== "user" || !div) continue;
+			const text = it.blocks
+				.map((b) => {
+					div.innerHTML = b.html;
+					return div.textContent ?? "";
+				})
+				.join("\n\n")
+				.trim();
+			if (text && out[out.length - 1] !== text) out.push(text);
+		}
+		return out;
+	});
+
+	// Selecting text in a reply offers "Quote".
+	let quoteAt = $state<{ x: number; y: number; text: string } | null>(null);
+	function onSelectEnd() {
+		const sel = window.getSelection();
+		const text = sel?.toString().trim() ?? "";
+		if (!sel || !text || !scroller || sel.rangeCount === 0) {
+			quoteAt = null;
+			return;
+		}
+		const range = sel.getRangeAt(0);
+		const node = range.commonAncestorContainer;
+		const el = node instanceof Element ? node : node.parentElement;
+		if (!el || !scroller.contains(el) || el.closest("textarea, input")) {
+			quoteAt = null;
+			return;
+		}
+		const r = range.getBoundingClientRect();
+		const box = scroller.getBoundingClientRect();
+		quoteAt = { x: Math.min(Math.max(r.left + r.width / 2 - box.left, 40), box.width - 40), y: r.top - box.top + scroller.scrollTop, text };
+	}
+
+	// A side chat (or anything else) asked to quote into this composer.
+	$effect(() => {
+		if (conv?.quote != null && composer) {
+			composer.insertQuote(conv.quote);
+			conv.quote = null;
+		}
+	});
 
 	function onClick(e: MouseEvent) {
 		const a = (e.target as HTMLElement).closest("a[href]") as HTMLAnchorElement | null;
@@ -82,6 +133,11 @@
 
 	$effect(() => {
 		if (active) tick().then(() => composer?.focus());
+	});
+
+	// A tab restored after a restart resumes its session once it is shown.
+	$effect(() => {
+		if (active && conv?.needsHistory) void loadHistory(conv);
 	});
 
 	const providerLabel = $derived(conv?.provider === "codex" ? "Codex" : "Claude");
@@ -155,9 +211,29 @@
 	<div class="@container flex h-full min-h-0">
 		<div class="flex min-w-0 flex-1 flex-col">
 			<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-			<div class="scrollbar-thin min-h-0 flex-1 overflow-y-auto" bind:this={scroller} onscroll={onScroll} onclick={onClick}>
+			<div
+				class="scrollbar-thin relative min-h-0 flex-1 overflow-y-auto"
+				bind:this={scroller}
+				onscroll={onScroll}
+				onclick={onClick}
+				onmouseup={() => setTimeout(onSelectEnd, 0)}
+				onkeyup={(e) => e.shiftKey && onSelectEnd()}
+			>
+				{#if quoteAt}
+					<button
+						class="bg-popover text-popover-foreground border-border hover:bg-accent absolute z-20 flex -translate-x-1/2 -translate-y-full items-center gap-1 rounded-md border px-2 py-1 text-xs shadow-md"
+						style="left: {quoteAt.x}px; top: {quoteAt.y - 6}px"
+						onmousedown={(e) => e.preventDefault()}
+						onclick={(e) => {
+							e.stopPropagation();
+							if (quoteAt) composer?.insertQuote(quoteAt.text);
+							quoteAt = null;
+							window.getSelection()?.removeAllRanges();
+						}}><Quote class="size-3" /> Quote</button
+					>
+				{/if}
 				<div class="mx-auto flex max-w-[52rem] flex-col gap-4 px-5 pt-6 pb-8" bind:this={content}>
-					{#if conv.loading}
+					{#if conv.loading || conv.needsHistory}
 						<div class="flex flex-col gap-3">
 							{#each [0, 1, 2] as i (i)}
 								<div class="skeleton-shimmer h-16 rounded-lg"></div>
@@ -202,12 +278,27 @@
 				</div>
 			</div>
 			<div class="mx-auto w-full max-w-[52rem] px-4 pb-1">
+				<LimitBanner limitedUntil={conv.limitedUntil} resumeAt={conv.resumeAt} onSchedule={(at) => convActions.schedule(conv, at)} />
+				<QueuePanel
+					items={conv.queue}
+					onChange={(items) => convActions.setQueue(conv, items)}
+					onSendNow={(m) => {
+						void convActions.setQueue(
+							conv,
+							conv.queue.filter((x) => x.id !== m.id),
+						);
+						void convActions.steer(conv, m.text, m.attachments ?? []);
+					}}
+				/>
 				<Composer
 					bind:this={composer}
 					running={conv.running}
 					slashCommands={conv.session.slashCommands ?? []}
 					placeholder={`Message ${providerLabel}`}
-					onSend={(text, attachments) => convActions.send(conv, text, attachments)}
+					onSend={(text, attachments) =>
+						conv.running || conv.queue.length ? convActions.enqueue(conv, text, attachments) : convActions.send(conv, text, attachments)}
+					onSteer={(text, attachments) => convActions.steer(conv, text, attachments)}
+					history={promptHistory}
 					onStop={() => convActions.interrupt(conv)}
 					onAttach={() => convActions.pickFiles()}
 					onPasteImage={(blob, name) => convActions.saveImage(blob, name)}

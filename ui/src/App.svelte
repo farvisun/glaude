@@ -10,7 +10,8 @@
 	import TaskOutputDialog from "$lib/components/conv/TaskOutputDialog.svelte";
 	import RewindDialog from "$lib/components/conv/RewindDialog.svelte";
 	import SessionPanel from "$lib/components/conv/SessionPanel.svelte";
-	import { convActions, startIdleReaper } from "$lib/state/sessions";
+	import { convActions, hostLost, restoreConversations, startIdleReaper } from "$lib/state/sessions";
+	import { inTauri } from "$lib/ipc";
 	import { dispose as disposeTerminal, retheme } from "$lib/state/terminals";
 	import { layout } from "$lib/state/layout.svelte";
 	import { ui } from "$lib/state/ui.svelte";
@@ -20,6 +21,11 @@
 	let sidebarPane = $state<Pane>();
 
 	startIdleReaper();
+	void restoreConversations();
+	if (inTauri)
+		import("@tauri-apps/api/event").then(({ listen }) => {
+			void listen("host-lost", () => hostLost());
+		});
 
 	layout.onClose = (tab) => {
 		if (tab.kind === "conversation" && tab.ref) convActions.close(tab.ref);

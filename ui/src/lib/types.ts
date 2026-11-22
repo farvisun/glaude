@@ -99,6 +99,13 @@ export interface TaskInfo {
 	parentTaskId?: string;
 }
 
+/** A message typed while a turn ran; sent when it ends. */
+export interface QueuedMessage {
+	id: string;
+	text: string;
+	attachments?: Attachment[];
+}
+
 export interface AgentInfo {
 	name: string;
 	description: string;
@@ -216,6 +223,9 @@ export type ConvEvent =
 	| { type: "turnDone"; durationMs?: number; error?: string }
 	| { type: "session"; info: SessionInfo }
 	| { type: "task"; task: TaskInfo }
+	| { type: "queue"; items: QueuedMessage[] }
+	| { type: "schedule"; limitedUntil?: string; resumeAt?: string }
+	| { type: "limited"; until?: string }
 	| { type: "tokens"; tokens: number }
 	| { type: "limits"; limits: Limits }
 	| { type: "reset"; items: Item[] }

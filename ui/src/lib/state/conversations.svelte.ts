@@ -2,7 +2,7 @@
 // this store applies them. Items live in a $state.raw array that is
 // replaced (not mutated) so only changed rows re-render.
 
-import type { ConvEvent, Item, Limits, Provider, SessionInfo, TaskInfo, TurnState } from "$lib/types";
+import type { ConvEvent, Item, Limits, Provider, QueuedMessage, SessionInfo, TaskInfo, TurnState } from "$lib/types";
 import { badges } from "./badges.svelte";
 
 export interface ConvSpec {
@@ -37,6 +37,16 @@ export class Conversation {
 	turnTokens = $state(0);
 	/** Text to put back into the composer (after a rewind). */
 	draft = $state<string | null>(null);
+	/** Messages to send when the turn ends (kept by the host). */
+	queue = $state<QueuedMessage[]>([]);
+	/** Usage limit hit: when it resets ("" = unknown). */
+	limitedUntil = $state<string | null>(null);
+	/** A "continue" is scheduled at this time. */
+	resumeAt = $state<string | null>(null);
+	/** Text to quote into the composer (from a side chat). */
+	quote = $state<string | null>(null);
+	/** Restored tab: its history loads from the transcript when shown. */
+	needsHistory = $state(false);
 
 	private index = new Map<string, number>();
 
@@ -150,6 +160,15 @@ export class Conversation {
 				break;
 			case "tokens":
 				this.turnTokens = ev.tokens;
+				break;
+			case "queue":
+				this.queue = ev.items;
+				break;
+			case "schedule":
+				this.limitedUntil = ev.limitedUntil ?? null;
+				this.resumeAt = ev.resumeAt ?? null;
+				break;
+			case "limited":
 				break;
 			case "limits":
 				this.limits = { ...this.limits, ...ev.limits };
