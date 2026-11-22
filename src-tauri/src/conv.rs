@@ -74,6 +74,16 @@ pub async fn conv_start(
         let sink = sink.clone();
         Arc::new(move |events: Vec<ConvEvent>| sink.push(events)) as glaude_claude::Sink
     };
+    // mamadoo's launch bookkeeping; a restart of an ended session is not a new launch.
+    let shared =
+        crate::accounts::prepare_launch(&spec.provider, &spec.account, !spec.skip_history).await;
+    if !shared.is_empty() {
+        tracing::info!("shared home for {}: {}", spec.account, shared.join("; "));
+        sink.push(vec![ConvEvent::Notice {
+            level: "info".into(),
+            text: format!("Shared home: {}", shared.join("; ")),
+        }]);
+    }
     let agent = match spec.provider.as_str() {
         "claude" => {
             let cs = ClaudeSpec {

@@ -1,3 +1,4 @@
+mod accounts;
 mod commands;
 mod conv;
 mod pty;
@@ -34,7 +35,16 @@ pub fn run() {
             commands::pick_folder,
             commands::pick_files,
             commands::save_attachment,
-            commands::accounts_brief,
+            accounts::accounts_brief,
+            accounts::accounts_list,
+            accounts::accounts_refresh,
+            accounts::accounts_create,
+            accounts::accounts_rename,
+            accounts::accounts_delete,
+            accounts::accounts_archive,
+            accounts::accounts_set_active,
+            accounts::accounts_share,
+            accounts::accounts_pref,
             commands::sessions_list,
             commands::codex_sessions_list,
             commands::codex_models,
