@@ -1,0 +1,419 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn-svelte/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* Estedad for Persian and Latin alike: one family, designed to pair both
+   scripts, so mixed lines keep one rhythm. Variable weight 100-900. */
+@font-face {
+	font-family: "Estedad";
+	font-style: normal;
+	font-display: swap;
+	font-weight: 100 900;
+	src: url("@fontsource-variable/estedad/files/estedad-arabic-wght-normal.woff2") format("woff2-variations");
+	unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E,
+		U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC;
+}
+@font-face {
+	font-family: "Estedad";
+	font-style: normal;
+	font-display: swap;
+	font-weight: 100 900;
+	src: url("@fontsource-variable/estedad/files/estedad-latin-wght-normal.woff2") format("woff2-variations");
+	unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+		U+2000-200B, U+2012-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+	font-family: "Estedad";
+	font-style: normal;
+	font-display: swap;
+	font-weight: 100 900;
+	src: url("@fontsource-variable/estedad/files/estedad-latin-ext-wght-normal.woff2") format("woff2-variations");
+	unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF,
+		U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* ---------------------------------------------------------------------------
+   Palette "Lajevard" (lapis): deep lapis ink, firuzeh (turquoise) accent,
+   saffron for anything that needs the user's attention.
+   ------------------------------------------------------------------------- */
+:root,
+[data-palette="lajevard"] {
+	--background: #f4f6fa;
+	--foreground: #15203a;
+	--card: #ffffff;
+	--card-foreground: #15203a;
+	--popover: #ffffff;
+	--popover-foreground: #15203a;
+	--primary: #0f7f76;
+	--primary-foreground: #f4fbfa;
+	--secondary: #e6ebf3;
+	--secondary-foreground: #15203a;
+	--muted: #e9edf4;
+	--muted-foreground: #5b6b86;
+	--accent: #e1e8f2;
+	--accent-foreground: #15203a;
+	--destructive: #c2413b;
+	--border: #d7deea;
+	--input: #cfd7e5;
+	--ring: #0f7f76;
+	--radius: 0.5rem;
+	--sidebar: #eaeef5;
+	--sidebar-foreground: #15203a;
+	--sidebar-primary: #0f7f76;
+	--sidebar-primary-foreground: #f4fbfa;
+	--sidebar-accent: #dbe3ef;
+	--sidebar-accent-foreground: #15203a;
+	--sidebar-border: #d3dbe8;
+	--sidebar-ring: #0f7f76;
+
+	--attention: #b7791f;
+	--attention-foreground: #fff8ea;
+	--ok: #2f855a;
+	--code-bg: #eef2f8;
+	--user-bubble: #e3ecf6;
+	--claude: #c8663d;
+	--codex: #3d6fd8;
+}
+
+.dark,
+.dark [data-palette="lajevard"],
+[data-palette="lajevard"].dark {
+	--background: #101a2e;
+	--foreground: #e4eaf4;
+	--card: #16233b;
+	--card-foreground: #e4eaf4;
+	--popover: #1a2943;
+	--popover-foreground: #e4eaf4;
+	--primary: #5cc8bd;
+	--primary-foreground: #0b1a1f;
+	--secondary: #1e2e4a;
+	--secondary-foreground: #e4eaf4;
+	--muted: #1a2944;
+	--muted-foreground: #8d9eba;
+	--accent: #22355a;
+	--accent-foreground: #e4eaf4;
+	--destructive: #ef6b6b;
+	--border: #26385a;
+	--input: #2c4066;
+	--ring: #5cc8bd;
+	--sidebar: #0c1526;
+	--sidebar-foreground: #d5ddeb;
+	--sidebar-primary: #5cc8bd;
+	--sidebar-primary-foreground: #0b1a1f;
+	--sidebar-accent: #172540;
+	--sidebar-accent-foreground: #e4eaf4;
+	--sidebar-border: #1d2c48;
+	--sidebar-ring: #5cc8bd;
+
+	--attention: #f2b544;
+	--attention-foreground: #1f1605;
+	--ok: #63c98b;
+	--code-bg: #0d1628;
+	--user-bubble: #1b2b48;
+	--claude: #e58a5f;
+	--codex: #7aa2ff;
+}
+
+/* ---------------------------------------------------------------------------
+   Palette "Dood" (smoke): quiet graphite neutrals with an indigo accent,
+   for long sessions where the text should be the only colour on screen.
+   ------------------------------------------------------------------------- */
+[data-palette="dood"] {
+	--background: #f6f6f7;
+	--foreground: #1c1d21;
+	--card: #ffffff;
+	--card-foreground: #1c1d21;
+	--popover: #ffffff;
+	--popover-foreground: #1c1d21;
+	--primary: #4f5bd5;
+	--primary-foreground: #f7f7ff;
+	--secondary: #ececef;
+	--secondary-foreground: #1c1d21;
+	--muted: #efeff2;
+	--muted-foreground: #6a6c75;
+	--accent: #e8e8ec;
+	--accent-foreground: #1c1d21;
+	--destructive: #c4372f;
+	--border: #e0e0e5;
+	--input: #d6d6dd;
+	--ring: #4f5bd5;
+	--sidebar: #efeff1;
+	--sidebar-foreground: #1c1d21;
+	--sidebar-primary: #4f5bd5;
+	--sidebar-primary-foreground: #f7f7ff;
+	--sidebar-accent: #e4e4e9;
+	--sidebar-accent-foreground: #1c1d21;
+	--sidebar-border: #e0e0e5;
+	--sidebar-ring: #4f5bd5;
+	--attention: #b45309;
+	--attention-foreground: #fff7ed;
+	--ok: #2f7d4f;
+	--code-bg: #f0f0f3;
+	--user-bubble: #ebebf0;
+	--claude: #c8663d;
+	--codex: #4f6fd8;
+}
+
+.dark [data-palette="dood"],
+[data-palette="dood"].dark {
+	--background: #18181b;
+	--foreground: #e7e7ea;
+	--card: #1f1f23;
+	--card-foreground: #e7e7ea;
+	--popover: #232327;
+	--popover-foreground: #e7e7ea;
+	--primary: #9aa4ff;
+	--primary-foreground: #14152a;
+	--secondary: #26262b;
+	--secondary-foreground: #e7e7ea;
+	--muted: #232327;
+	--muted-foreground: #9a9ba3;
+	--accent: #2b2b31;
+	--accent-foreground: #e7e7ea;
+	--destructive: #f07167;
+	--border: #2e2e34;
+	--input: #35353c;
+	--ring: #9aa4ff;
+	--sidebar: #141417;
+	--sidebar-foreground: #d9d9de;
+	--sidebar-primary: #9aa4ff;
+	--sidebar-primary-foreground: #14152a;
+	--sidebar-accent: #222226;
+	--sidebar-accent-foreground: #e7e7ea;
+	--sidebar-border: #26262b;
+	--sidebar-ring: #9aa4ff;
+	--attention: #f5b041;
+	--attention-foreground: #1f1605;
+	--ok: #6cc48f;
+	--code-bg: #131316;
+	--user-bubble: #26262c;
+	--claude: #e58a5f;
+	--codex: #8aa6ff;
+}
+
+@theme inline {
+	--font-sans: "Estedad", ui-sans-serif, system-ui, sans-serif;
+	--font-mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
+	--color-sidebar-ring: var(--sidebar-ring);
+	--color-sidebar-border: var(--sidebar-border);
+	--color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+	--color-sidebar-accent: var(--sidebar-accent);
+	--color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+	--color-sidebar-primary: var(--sidebar-primary);
+	--color-sidebar-foreground: var(--sidebar-foreground);
+	--color-sidebar: var(--sidebar);
+	--color-ring: var(--ring);
+	--color-input: var(--input);
+	--color-border: var(--border);
+	--color-destructive: var(--destructive);
+	--color-accent-foreground: var(--accent-foreground);
+	--color-accent: var(--accent);
+	--color-muted-foreground: var(--muted-foreground);
+	--color-muted: var(--muted);
+	--color-secondary-foreground: var(--secondary-foreground);
+	--color-secondary: var(--secondary);
+	--color-primary-foreground: var(--primary-foreground);
+	--color-primary: var(--primary);
+	--color-popover-foreground: var(--popover-foreground);
+	--color-popover: var(--popover);
+	--color-card-foreground: var(--card-foreground);
+	--color-card: var(--card);
+	--color-foreground: var(--foreground);
+	--color-background: var(--background);
+	--color-attention: var(--attention);
+	--color-attention-foreground: var(--attention-foreground);
+	--color-ok: var(--ok);
+	--color-code: var(--code-bg);
+	--color-user-bubble: var(--user-bubble);
+	--color-claude: var(--claude);
+	--color-codex: var(--codex);
+	--radius-sm: calc(var(--radius) * 0.6);
+	--radius-md: calc(var(--radius) * 0.8);
+	--radius-lg: var(--radius);
+	--radius-xl: calc(var(--radius) * 1.4);
+}
+
+@layer base {
+	* {
+		@apply border-border outline-ring/50;
+	}
+	html,
+	body,
+	#app {
+		height: 100%;
+		overflow: hidden;
+	}
+	body {
+		@apply bg-background text-foreground font-sans antialiased;
+		font-size: 14px;
+		line-height: 1.6;
+		font-feature-settings: "ss01";
+		-webkit-user-select: none;
+		user-select: none;
+	}
+	/* Text the user may want to copy. */
+	.selectable,
+	.prose-g {
+		-webkit-user-select: text;
+		user-select: text;
+	}
+	textarea,
+	input {
+		-webkit-user-select: text;
+		user-select: text;
+	}
+	@media (prefers-reduced-motion: reduce) {
+		*,
+		*::before,
+		*::after {
+			animation-duration: 0.01ms !important;
+			transition-duration: 0.01ms !important;
+		}
+	}
+}
+
+/* ---------------------------------------------------------------------------
+   Rendered message blocks. Every block carries its own dir; only logical
+   properties are used so lists, quotes and tables mirror in RTL.
+   ------------------------------------------------------------------------- */
+.prose-g {
+	font-size: 15px;
+	line-height: 1.85;
+	overflow-wrap: anywhere;
+}
+.prose-g[dir="ltr"] {
+	line-height: 1.7;
+}
+.prose-g > * + * {
+	margin-block-start: 0.7em;
+}
+.prose-g h1,
+.prose-g h2,
+.prose-g h3,
+.prose-g h4 {
+	font-weight: 700;
+	line-height: 1.4;
+	margin-block: 1.1em 0.4em;
+}
+.prose-g h1 {
+	font-size: 1.35em;
+}
+.prose-g h2 {
+	font-size: 1.2em;
+}
+.prose-g h3 {
+	font-size: 1.08em;
+}
+.prose-g ul,
+.prose-g ol {
+	padding-inline-start: 1.4em;
+}
+.prose-g ul {
+	list-style: disc;
+}
+.prose-g ol {
+	list-style: decimal;
+}
+.prose-g[dir="rtl"] ol {
+	list-style: persian;
+}
+.prose-g li + li {
+	margin-block-start: 0.25em;
+}
+.prose-g li > p {
+	margin: 0;
+}
+.prose-g blockquote {
+	border-inline-start: 3px solid var(--border);
+	padding-inline-start: 0.9em;
+	color: var(--muted-foreground);
+}
+.prose-g a {
+	color: var(--primary);
+	text-decoration: underline;
+	text-underline-offset: 3px;
+	unicode-bidi: isolate;
+}
+.prose-g strong {
+	font-weight: 700;
+}
+.prose-g hr {
+	border: 0;
+	border-block-start: 1px solid var(--border);
+}
+.prose-g code {
+	font-family: var(--font-mono);
+	font-size: 0.86em;
+	background: var(--code-bg);
+	padding: 0.1em 0.35em;
+	border-radius: 4px;
+	direction: ltr;
+	unicode-bidi: isolate;
+}
+.prose-g pre {
+	direction: ltr;
+	text-align: left;
+	unicode-bidi: isolate;
+	background: var(--code-bg);
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	padding: 0.8em 1em;
+	overflow-x: auto;
+	font-size: 13px;
+	line-height: 1.55;
+}
+.prose-g pre code {
+	background: none;
+	padding: 0;
+	font-size: inherit;
+}
+.prose-g table {
+	border-collapse: collapse;
+	display: block;
+	overflow-x: auto;
+	max-width: 100%;
+}
+.prose-g th,
+.prose-g td {
+	border: 1px solid var(--border);
+	padding: 0.35em 0.7em;
+	text-align: start;
+}
+.prose-g th {
+	background: var(--muted);
+	font-weight: 600;
+}
+.prose-g bdi,
+.prose-g .ltr-run {
+	unicode-bidi: isolate;
+}
+.prose-g input[type="checkbox"] {
+	margin-inline-end: 0.4em;
+}
+
+/* syntect class-based highlighting (base16-ish, follows palette). */
+.prose-g .hl-comment {
+	color: var(--muted-foreground);
+	font-style: italic;
+}
+.prose-g .hl-keyword,
+.prose-g .hl-storage {
+	color: var(--codex);
+}
+.prose-g .hl-string {
+	color: var(--ok);
+}
+.prose-g .hl-constant,
+.prose-g .hl-number {
+	color: var(--attention);
+}
+.prose-g .hl-entity,
+.prose-g .hl-function {
+	color: var(--claude);
+}
+
+.scrollbar-thin {
+	scrollbar-width: thin;
+}
