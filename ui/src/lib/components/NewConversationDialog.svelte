@@ -60,7 +60,17 @@
 		{ value: "haiku", label: "Haiku" },
 		{ value: "fable", label: "Fable" },
 	];
-	const models = $derived(provider === "claude" ? claudeModels : [{ value: "", label: "Default" }]);
+	let codexModels = $state<{ value: string; label: string }[]>([]);
+	const models = $derived(provider === "claude" ? claudeModels : [{ value: "", label: "Default" }, ...codexModels]);
+
+	// Codex lists its models through the app-server of the chosen account.
+	$effect(() => {
+		if (!ui.newConversationOpen || provider !== "codex") return;
+		const acct = account;
+		call<{ value: string; label: string }[]>("codex_models", { account: acct })
+			.then((list) => (codexModels = list.map((m) => ({ value: m.value, label: m.label || m.value }))))
+			.catch(() => (codexModels = []));
+	});
 	const modes = $derived(permissionModes(provider));
 	const providerAccounts = $derived(accounts.filter((a) => a.provider === provider && !a.archived));
 

@@ -210,15 +210,21 @@ export const mockBackend: Record<string, (args: Record<string, unknown>) => unkn
 	save_attachment: async (args) => ({ name: args.name, mime: args.mime, path: `/tmp/${args.name}` }),
 	pick_folder: async () => "/Users/demo/Projects/glaude",
 	default_cwd: async () => "/Users/demo/Projects/glaude",
+	codex_models: async () => [
+		{ value: "gpt-6.2-sol", label: "GPT-6.2-Sol", efforts: ["low", "medium", "high"] },
+		{ value: "gpt-6-luna", label: "GPT-6-Luna", efforts: ["low", "medium"] },
+	],
 	sessions_list: async () => {
 		const now = Date.now();
 		return [
 			{ provider: "claude", id: "s1", cwd: "/Users/demo/Projects/glaude", title: "رفع مشکل جهت متن در پیام‌ها", updated: now - 4 * 60e3 },
-			{ provider: "codex", id: "s2", cwd: "/Users/demo/Projects/glaude", title: "Add terminal tabs with portable-pty", updated: now - 3 * 3600e3 },
 			{ provider: "claude", id: "s3", cwd: "/Users/demo/Projects/shop", title: "گزارش فروش هفتگی", updated: now - 26 * 3600e3 },
 			{ provider: "claude", id: "s4", cwd: "/Users/demo/Projects/shop", title: "Fix checkout rounding", updated: now - 3 * 86400e3 },
 		];
 	},
+	codex_sessions_list: async () => [
+		{ provider: "codex", id: "s2", cwd: "/Users/demo/Projects/glaude", title: "Add terminal tabs with portable-pty", updated: Date.now() - 3 * 3600e3 },
+	],
 	accounts_brief: async () => [
 		{ provider: "claude", name: "default", email: "me@example.com", active: true, archived: false },
 		{ provider: "claude", name: "work", email: "work@example.com", active: false, archived: false },

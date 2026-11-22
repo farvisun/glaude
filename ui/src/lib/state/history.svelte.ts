@@ -56,16 +56,24 @@ class History {
 		return [...map.values()].sort((a, b) => b.updated - a.updated);
 	}
 
+	/** Claude and Codex lists load independently; Codex starts its
+	 * app-server on first use and may take a few seconds. */
 	async refresh() {
-		try {
-			const list = await call<SessionSummary[]>("sessions_list");
-			this.sessions = list;
-			this.error = null;
-		} catch (e) {
-			this.error = e instanceof Error ? e.message : String(e);
-		} finally {
-			this.loading = false;
-		}
+		const load = async (cmd: string, provider: Provider) => {
+			try {
+				const list = await call<SessionSummary[]>(cmd);
+				this.sessions = [...this.sessions.filter((s) => s.provider !== provider), ...list].sort(
+					(a, b) => b.updated - a.updated,
+				);
+				if (provider === "claude") this.error = null;
+			} catch (e) {
+				// Codex may simply not be installed; only Claude errors are shown.
+				if (provider === "claude") this.error = e instanceof Error ? e.message : String(e);
+			} finally {
+				if (provider === "claude") this.loading = false;
+			}
+		};
+		await Promise.all([load("sessions_list", "claude"), load("codex_sessions_list", "codex")]);
 	}
 
 	/** Refresh soon, coalescing bursts (e.g. several turns ending). */
