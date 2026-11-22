@@ -1,6 +1,6 @@
 // UI preferences kept in localStorage, applied live (zoom, density, fonts).
 
-export type Palette = "lajevard" | "dood";
+export type Palette = "sade" | "lajevard" | "dood";
 /** Where file links from replies open. */
 export type Editor = "default" | "vscode" | "cursor" | "zed";
 export type Density = "comfortable" | "compact";
@@ -22,7 +22,9 @@ export const widths: Record<MessageWidth, string> = { narrow: "44rem", default: 
 
 /** Everything saved; new fields get their default when missing. */
 const defaults = {
-	palette: "lajevard" as Palette,
+	palette: "sade" as Palette,
+	/** Animations for panels, tabs and menus (off also when the OS asks for less motion). */
+	motion: true,
 	progressPanel: true,
 	/** Show the output of the user's Claude statusLine.command instead of the built-in line. */
 	statuslineScript: false,
@@ -63,6 +65,7 @@ export type Prefs = typeof defaults;
 
 class PrefStore {
 	palette = $state(defaults.palette);
+	motion = $state(defaults.motion);
 	progressPanel = $state(defaults.progressPanel);
 	statuslineScript = $state(defaults.statuslineScript);
 	editor = $state(defaults.editor);
@@ -93,6 +96,15 @@ class PrefStore {
 		try {
 			const saved = JSON.parse(localStorage.getItem(KEY) ?? "null") as Partial<Prefs> | null;
 			if (saved) this.assign(saved);
+			// The flat design (2026-11) brought the Sade palette; move the old
+			// default over once. Picking Lajevard again sticks.
+			if (!localStorage.getItem("glaude.design.v2")) {
+				localStorage.setItem("glaude.design.v2", "1");
+				if (this.palette === "lajevard") {
+					this.palette = "sade";
+					this.save();
+				}
+			}
 		} catch {
 			/* ignore corrupt prefs */
 		}
