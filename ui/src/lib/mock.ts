@@ -468,7 +468,48 @@ const mockDiffs = (): FileDiff[] => [
 ];
 let mockDirty = 2;
 
+/** A long conversation for scroll performance checks. */
+function longItems(n: number): Item[] {
+	const code = Array.from(
+		{ length: 24 },
+		(_, i) =>
+			`<span class="hl-storage">let</span> x${i} <span class="hl-keyword">=</span> <span class="hl-function">parse</span>(<span class="hl-string">"value ${i}"</span>)<span class="hl-keyword">?</span>; <span class="hl-comment">// step ${i}</span>`,
+	).join("\n");
+	const items: Item[] = [];
+	for (let i = 0; i < n; i++) {
+		items.push({ kind: "user", id: `lu${i}`, blocks: [p(i % 3 ? `Question ${i}: why does the parser fail on \`src/main.rs\`?` : `سؤال ${i}: چرا این تابع کند است؟`)], attachments: [] });
+		items.push({ kind: "reasoning", id: `lr${i}`, blocks: [p("Look at the parser first, then the tests.")], streaming: false });
+		items.push({ kind: "tool", id: `lt${i}`, name: "Read", title: "src/main.rs", status: "done", input: { file_path: "src/main.rs" }, output: "fn main() {}\n".repeat(40) } as Item);
+		items.push({
+			kind: "tool",
+			id: `le${i}`,
+			name: "Edit",
+			title: "src/parse.rs",
+			status: "done",
+			input: { file_path: "src/parse.rs" },
+			diffs: [{ path: "src/parse.rs", kind: "update", added: 3, removed: 2, diff: "@@ -1,6 +1,7 @@\n fn a() {\n-  old();\n-  older();\n+  new();\n+  newer();\n+  newest();\n }\n" }],
+		} as Item);
+		items.push({
+			kind: "assistant",
+			id: `la${i}`,
+			streaming: false,
+			blocks: [
+				p(`Answer ${i}. The parser reads the whole input before it checks the header, so large files are slow. Here is the fix:`),
+				{ html: `<pre><code class="language-rust">${code}</code></pre>`, dir: "ltr" },
+				{ html: "<table><thead><tr><th>Case</th><th>Before</th><th>After</th></tr></thead><tbody><tr><td>small</td><td>2 ms</td><td>1 ms</td></tr><tr><td>large</td><td>900 ms</td><td>40 ms</td></tr></tbody></table>", dir: "ltr" },
+				{ html: "<ul><li>Check the header first</li><li>Stream the body</li><li>این بخش فارسی است و باید راست‌به‌چپ نمایش داده شود.</li></ul>", dir: "ltr" },
+			],
+		});
+	}
+	return items;
+}
+
+async function demoLong(ch: Chan) {
+	ch.push([{ type: "reset", items: longItems(150) }]);
+}
+
 const demoScenarios: [RegExp, (ch: Chan, text: string) => Promise<void>][] = [
+	[/^demo long/i, demoLong],
 	[/^demo paths/i, demoPaths],
 	[/^demo limit/i, demoLimit],
 	[/^demo agents/i, demoAgents],

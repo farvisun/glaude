@@ -13,7 +13,7 @@
 	import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
 	import { stash } from "$lib/state/stash.svelte";
 	import { fmtAgo } from "$lib/format";
-	import { isMac } from "$lib/state/prefs.svelte";
+	import { isMac, prefs } from "$lib/state/prefs.svelte";
 
 	let {
 		running,
@@ -29,7 +29,7 @@
 		onCycleMode,
 		modeHint,
 		onSteer,
-		history = [],
+		getHistory,
 	}: {
 		running: boolean;
 		disabled?: boolean;
@@ -49,17 +49,19 @@
 		modeHint?: string;
 		/** Cmd/Ctrl+Enter while a turn runs: send into it now. */
 		onSteer?: (text: string, attachments: Attachment[]) => void;
-		/** Earlier prompts, oldest first, for ArrowUp. */
-		history?: string[];
+		/** Earlier prompts, oldest first, for ArrowUp (read when needed). */
+		getHistory?: () => string[];
 	} = $props();
 
 	// ArrowUp/ArrowDown walk earlier prompts; the draft is kept aside.
 	let recall = $state<number | null>(null);
 	let kept = "";
+	let history: string[] = [];
 	function walk(dir: -1 | 1): boolean {
-		if (!history.length) return false;
 		if (recall === null) {
 			if (dir === 1) return false;
+			history = getHistory?.() ?? [];
+			if (!history.length) return false;
 			kept = text;
 			recall = history.length - 1;
 		} else {
@@ -265,9 +267,16 @@
 			if (walk(1)) e.preventDefault();
 			return;
 		}
-		if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
-			e.preventDefault();
-			send(running && (e.metaKey || e.ctrlKey));
+		if (e.key === "Enter" && !e.isComposing) {
+			const mod = e.metaKey || e.ctrlKey;
+			if (prefs.sendKey === "enter" && !e.shiftKey) {
+				e.preventDefault();
+				send(running && mod);
+			} else if (prefs.sendKey === "mod-enter" && mod) {
+				// Enter adds a line; Cmd/Ctrl+Enter sends, with Shift it steers.
+				e.preventDefault();
+				send(running && e.shiftKey);
+			}
 		}
 		if (e.key === "Escape" && running) onStop();
 	}
@@ -374,7 +383,11 @@
 		bind:value={text}
 		{dir}
 		rows="1"
-		placeholder={running ? `Queue a message · ${isMac ? "⌘" : "Ctrl+"}↵ to send it now` : placeholder}
+		placeholder={running
+			? `Queue a message · ${prefs.sendKey === "enter" ? (isMac ? "⌘↵" : "Ctrl+↵") : isMac ? "⇧⌘↵" : "Ctrl+Shift+↵"} to send it now`
+			: prefs.sendKey === "mod-enter"
+				? `${placeholder} · ${isMac ? "⌘↵" : "Ctrl+↵"} to send`
+				: placeholder}
 		class="placeholder:text-muted-foreground block max-h-[280px] w-full resize-none bg-transparent px-3.5 pt-3 pb-1 text-[15px] leading-7 outline-none"
 		oninput={() => {
 			caret = el?.selectionStart ?? text.length;

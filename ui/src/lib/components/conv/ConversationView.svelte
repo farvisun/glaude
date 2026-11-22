@@ -61,13 +61,13 @@
 	let atBottom = $state(true);
 	let composer = $state<{ focus: () => void; setText: (t: string) => void; insertQuote: (t: string) => void }>();
 
-	// Earlier prompts for ArrowUp, oldest first.
-	const promptHistory = $derived.by(() => {
+	// Earlier prompts for ArrowUp, oldest first (built only when asked for).
+	function promptHistory(): string[] {
 		if (!conv) return [];
 		const out: string[] = [];
-		const div = typeof document !== "undefined" ? document.createElement("div") : null;
+		const div = document.createElement("div");
 		for (const it of conv.items) {
-			if (it.kind !== "user" || !div) continue;
+			if (it.kind !== "user") continue;
 			const text = it.blocks
 				.map((b) => {
 					div.innerHTML = b.html;
@@ -78,7 +78,7 @@
 			if (text && out[out.length - 1] !== text) out.push(text);
 		}
 		return out;
-	});
+	}
 
 	// Selecting text in a reply offers "Quote".
 	let quoteAt = $state<{ x: number; y: number; text: string } | null>(null);
@@ -127,12 +127,14 @@
 	function onScroll() {
 		if (!scroller) return;
 		atBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 48;
+		if (scroller.scrollTop < 1200) void showEarlier();
 	}
+
 
 	let content = $state<HTMLDivElement>();
 
 	// Keep the view pinned to the newest message while the user is at the
-	// bottom; content-visibility rows change height as they render, so a
+	// bottom; rows change height as they render (code, images), so a
 	// one-off scroll after an update is not enough.
 	$effect(() => {
 		if (!content || !scroller) return;
@@ -176,6 +178,11 @@
 		if (!conv.drawer) tick().then(() => composer?.focus());
 	}
 
+	// Seen: clear the "finished while away" dot.
+	$effect(() => {
+		if (active && conv?.unread) conv.markUnread(false);
+	});
+
 	// A tab restored after a restart resumes its session once it is shown.
 	$effect(() => {
 		if (active && conv?.needsHistory) void loadHistory(conv);
@@ -189,6 +196,44 @@
 	}
 
 	const view = $derived(groupItems(conv?.items ?? []));
+
+	// Only the newest rows are rendered at first; older ones are added in
+	// chunks while scrolling up, keeping what is on screen in place (WebKit
+	// has no scroll anchoring, and placeholder heights made content jump).
+	const FIRST_ROWS = 60;
+	const MORE_ROWS = 40;
+	let firstId = $state<string | null>(null);
+	let growing = false;
+	const startIdx = $derived.by(() => {
+		const main = view.main;
+		const i = firstId ? main.findIndex((x) => x.id === firstId) : -1;
+		return i >= 0 ? i : Math.max(0, main.length - FIRST_ROWS);
+	});
+	const shown = $derived(startIdx > 0 ? view.main.slice(startIdx) : view.main);
+	// Pin the window's first row so rows streaming in at the bottom never
+	// push rows out at the top (a new history load starts over).
+	$effect(() => {
+		const main = view.main;
+		if (!main.length) {
+			firstId = null;
+			return;
+		}
+		if (!firstId || !main.some((x) => x.id === firstId)) firstId = main[Math.max(0, main.length - FIRST_ROWS)].id;
+	});
+
+	async function showEarlier() {
+		if (growing || !scroller || startIdx === 0) return;
+		growing = true;
+		const s = scroller;
+		const before = s.scrollHeight - s.scrollTop;
+		firstId = view.main[Math.max(0, startIdx - MORE_ROWS)].id;
+		await tick();
+		// Same distance from the bottom as before: the visible rows stay put.
+		s.scrollTop = s.scrollHeight - before;
+		growing = false;
+		// Still near the top (fast scrolling, short rows): add another chunk.
+		if (s.scrollTop < 1200 && startIdx > 0) requestAnimationFrame(() => void showEarlier());
+	}
 
 	const taskOf = (it: Item) => (it.kind === "tool" && conv ? conv.taskFor(it.id) : undefined);
 
@@ -285,7 +330,7 @@
 						}}><Quote class="size-3" /> Quote</button
 					>
 				{/if}
-				<div class="mx-auto flex max-w-[52rem] flex-col gap-4 px-5 pt-6 pb-8" bind:this={content}>
+				<div class="mx-auto flex max-w-(--msg-w) flex-col gap-(--row-gap) px-5 pt-6 pb-8" bind:this={content}>
 					{#if conv.loading || conv.needsHistory}
 						<div class="flex flex-col gap-3">
 							{#each [0, 1, 2] as i (i)}
@@ -297,7 +342,12 @@
 							Ask {providerLabel} anything about <span class="text-foreground font-mono" dir="ltr">{conv.cwd}</span>.
 						</div>
 					{/if}
-					{#each view.main as item (item.id)}
+					{#if startIdx > 0}
+						<button class="text-muted-foreground hover:text-foreground self-center text-xs" onclick={() => void showEarlier()}
+							>{startIdx} earlier {startIdx === 1 ? "message" : "messages"}</button
+						>
+					{/if}
+					{#each shown as item (item.id)}
 						<div class="cv-row">
 							<ItemView
 								{item}
@@ -330,7 +380,7 @@
 					{/if}
 				</div>
 			</div>
-			<div class="mx-auto w-full max-w-[52rem] px-4 pb-1">
+			<div class="mx-auto w-full max-w-(--msg-w) px-4 pb-1">
 				<LimitBanner limitedUntil={conv.limitedUntil} resumeAt={conv.resumeAt} onSchedule={(at) => convActions.schedule(conv, at)} />
 				<QueuePanel
 					items={conv.queue}
@@ -353,7 +403,7 @@
 							? convActions.send(conv, text, attachments)
 							: convActions.enqueue(conv, text, attachments)}
 					onSteer={(text, attachments) => convActions.steer(conv, text, attachments)}
-					history={promptHistory}
+					getHistory={promptHistory}
 					onStop={() => convActions.interrupt(conv)}
 					onAttach={() => convActions.pickFiles()}
 					onPasteImage={(blob, name) => convActions.saveImage(blob, name)}
@@ -385,8 +435,10 @@
 {/if}
 
 <style>
+	/* No content-visibility on rows: WebKit has no scroll anchoring, so
+	   placeholder heights made the content jump while scrolling up. Older
+	   rows are added in chunks instead (showEarlier). */
 	.cv-row {
-		content-visibility: auto;
-		contain-intrinsic-size: auto 80px;
+		min-width: 0;
 	}
 </style>
