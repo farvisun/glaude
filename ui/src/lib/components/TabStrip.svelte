@@ -10,6 +10,13 @@
 	import Settings from "@lucide/svelte/icons/settings";
 	import Sparkles from "@lucide/svelte/icons/sparkles";
 	import Columns2 from "@lucide/svelte/icons/columns-2";
+	import Rows2 from "@lucide/svelte/icons/rows-2";
+	import PanelRightClose from "@lucide/svelte/icons/panel-right-close";
+	import PanelRightOpen from "@lucide/svelte/icons/panel-right-open";
+	import PanelBottom from "@lucide/svelte/icons/panel-bottom";
+	import * as Tooltip from "$lib/components/ui/tooltip";
+	import { Kbd } from "$lib/components/ui/kbd";
+	import { termPanel } from "$lib/state/termpanel.svelte";
 	import FileText from "@lucide/svelte/icons/file-text";
 	import GitCompare from "@lucide/svelte/icons/git-compare";
 	import ChevronDown from "@lucide/svelte/icons/chevron-down";
@@ -19,7 +26,7 @@
 	import { layout, MAX_PANES, type Leaf, type TabKind } from "$lib/state/layout.svelte";
 	import { drag } from "$lib/state/drag.svelte";
 	import { ui } from "$lib/state/ui.svelte";
-	import { isMac } from "$lib/state/prefs.svelte";
+	import { isMac, prefs } from "$lib/state/prefs.svelte";
 	import { tabBadge } from "$lib/state/badges.svelte";
 	import { stepOf } from "$lib/state/activity";
 	import { conversations } from "$lib/state/conversations.svelte";
@@ -59,13 +66,16 @@
 		if (id) layout.moveTab(id, pane.id, at);
 	}
 
-	function splitActive() {
+	function splitActive(edge: "right" | "bottom") {
 		if (!pane.active) return;
 		const tab = layout.tabs[pane.active];
-		// Splitting a lone tab: a fresh Start pane on the right.
-		if (pane.tabs.length === 1) layout.splitNew(pane.id, "right");
-		else if (tab) layout.splitWith(pane.id, "right", tab.id);
+		// Splitting a lone tab: a fresh Start pane on that side.
+		if (pane.tabs.length === 1) layout.splitNew(pane.id, edge);
+		else if (tab) layout.splitWith(pane.id, edge, tab.id);
 	}
+	// The progress panel belongs to conversations; its toggle sits on the
+	// right of each strip showing one.
+	const showsConversation = $derived(layout.tabs[pane.active ?? ""]?.kind === "conversation");
 
 	const isFirstPane = $derived(layout.leaves()[0]?.id === pane.id);
 	const focusedPane = $derived(layout.focused === pane.id);
@@ -284,17 +294,44 @@
 				<DropdownMenu.Item
 					onclick={() => {
 						layout.focus(pane.id);
+						termPanel.newTerminal();
+					}}
+				>
+					<PanelBottom /> New terminal
+				</DropdownMenu.Item>
+				<DropdownMenu.Item
+					onclick={() => {
+						layout.focus(pane.id);
 						ui.openTerminal();
 					}}
 				>
-					<SquareTerminal /> New terminal
+					<SquareTerminal /> New terminal in a tab
 				</DropdownMenu.Item>
+				{#if layout.leaves().length < MAX_PANES && pane.active}
+					<DropdownMenu.Separator />
+					<DropdownMenu.Item onclick={() => splitActive("right")}><Columns2 /> Split right</DropdownMenu.Item>
+					<DropdownMenu.Item onclick={() => splitActive("bottom")}><Rows2 /> Split down</DropdownMenu.Item>
+				{/if}
 			</DropdownMenu.Content>
 		</DropdownMenu.Root>
-		{#if layout.leaves().length < MAX_PANES}
-			<Button variant="ghost" size="icon-sm" aria-label="Split right" onclick={splitActive}>
-				<Columns2 />
-			</Button>
+		{#if showsConversation}
+			<Tooltip.Root>
+				<Tooltip.Trigger>
+					{#snippet child({ props })}
+						<Button
+							{...props}
+							variant="ghost"
+							size="icon-sm"
+							aria-label={prefs.progressPanel ? "Hide progress panel" : "Show progress panel"}
+							aria-pressed={prefs.progressPanel}
+							onclick={() => prefs.set("progressPanel", !prefs.progressPanel)}
+						>
+							{#if prefs.progressPanel}<PanelRightClose />{:else}<PanelRightOpen />{/if}
+						</Button>
+					{/snippet}
+				</Tooltip.Trigger>
+				<Tooltip.Content>{prefs.progressPanel ? "Hide" : "Show"} progress panel <Kbd>{isMac ? "⌥⌘P" : "Ctrl+Alt+P"}</Kbd></Tooltip.Content>
+			</Tooltip.Root>
 		{/if}
 	</div>
 </div>

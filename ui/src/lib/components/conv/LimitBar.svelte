@@ -2,7 +2,8 @@
 	import type { LimitWindow } from "$lib/types";
 	import { fmtUntil, leftTone } from "$lib/format";
 
-	let { label, win, wide = false }: { label: string; win?: LimitWindow; wide?: boolean } = $props();
+	// resetClass: the statusline hides the reset time when it runs out of room.
+	let { label, win, wide = false, resetClass = "" }: { label: string; win?: LimitWindow; wide?: boolean; resetClass?: string } = $props();
 
 	const expired = $derived(!!win?.resetsAt && new Date(win.resetsAt).getTime() < Date.now());
 	const left = $derived(win ? (expired ? 100 : Math.max(0, Math.min(100, 100 - win.used))) : null);
@@ -17,6 +18,6 @@
 			<span class="absolute inset-y-0 start-0 rounded-full" style:width="{left}%" style:background={toneVar[tone]}></span>
 		</span>
 		<span>{Math.round(left)}%</span>
-		{#if win?.resetsAt && !expired}<span class="text-muted-foreground">↻{fmtUntil(win.resetsAt)}</span>{/if}
+		{#if win?.resetsAt && !expired}<span class="text-muted-foreground {resetClass}">↻{fmtUntil(win.resetsAt)}</span>{/if}
 	</span>
 {/if}

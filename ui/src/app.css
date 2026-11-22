@@ -287,6 +287,8 @@
 	--prose-leading: 1.85;
 	--prose-leading-ltr: 1.7;
 	--tab-h: 2.75rem;
+	/* Bottom bars (sidebar footer, statusline) share one height so they line up. */
+	--bar-h: 2rem;
 }
 :root[data-density="compact"] {
 	--row-gap: 0.6rem;

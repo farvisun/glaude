@@ -7,7 +7,7 @@
 	import Search from "@lucide/svelte/icons/search";
 	import Settings from "@lucide/svelte/icons/settings";
 	import Users from "@lucide/svelte/icons/users";
-	import SquareTerminal from "@lucide/svelte/icons/square-terminal";
+	import PanelBottom from "@lucide/svelte/icons/panel-bottom";
 	import Sun from "@lucide/svelte/icons/sun";
 	import Moon from "@lucide/svelte/icons/moon";
 	import { toggleMode, mode } from "mode-watcher";
@@ -16,6 +16,7 @@
 	import { ui } from "$lib/state/ui.svelte";
 	import { history } from "$lib/state/history.svelte";
 	import SessionList from "./SessionList.svelte";
+	import { termPanel } from "$lib/state/termpanel.svelte";
 	import LiveAgents from "./LiveAgents.svelte";
 	import { onMount } from "svelte";
 
@@ -31,8 +32,9 @@
 </script>
 
 <aside class="bg-sidebar text-sidebar-foreground flex h-full flex-col whitespace-nowrap">
-	<div class="flex h-(--tab-h) shrink-0 items-center gap-1 px-2 {isMac ? 'ps-[78px]' : ''}" data-tauri-drag-region>
-		<span class="text-sm font-semibold tracking-tight" data-tauri-drag-region>Glaude</span>
+	<!-- On macOS the window buttons sit on the left of this row (centered on it, see tauri.conf.json). -->
+	<div class="flex h-(--tab-h) shrink-0 items-center gap-1 ps-3 pe-1.5 select-none {isMac ? 'ps-[78px]' : ''}" data-tauri-drag-region>
+		<span class="text-[13px] leading-none font-semibold tracking-tight" data-tauri-drag-region>Glaude</span>
 		<div class="ms-auto flex items-center">
 			<Tooltip.Root>
 				<Tooltip.Trigger>
@@ -69,32 +71,59 @@
 		</section>
 	</div>
 
-	<div class="border-sidebar-border flex items-center gap-0.5 border-t px-2 py-1.5">
-		<Button variant="ghost" size="sm" onclick={() => layout.openTab({ kind: "accounts", title: "Accounts" })}>
+	{#snippet tip(text: string, keys?: string)}
+		{text}{#if keys}<Kbd>{keys}</Kbd>{/if}
+	{/snippet}
+	<div class="border-sidebar-border flex h-(--bar-h) shrink-0 items-center gap-0.5 border-t ps-1.5 pe-1.5">
+		<Button variant="ghost" size="sm" class="text-muted-foreground hover:text-foreground h-7 px-2" onclick={() => layout.openTab({ kind: "accounts", title: "Accounts" })}>
 			<Users /> Accounts
 		</Button>
-		<Tooltip.Root>
-			<Tooltip.Trigger>
-				{#snippet child({ props })}
-					<Button {...props} variant="ghost" size="icon-sm" aria-label="New terminal" onclick={() => ui.openTerminal()}>
-						<SquareTerminal />
-					</Button>
-				{/snippet}
-			</Tooltip.Trigger>
-			<Tooltip.Content>New terminal</Tooltip.Content>
-		</Tooltip.Root>
-		<div class="ms-auto flex items-center">
-			<Button variant="ghost" size="icon-sm" aria-label="Toggle light or dark" onclick={toggleMode}>
-				{#if mode.current === "dark"}<Sun />{:else}<Moon />{/if}
-			</Button>
-			<Button
-				variant="ghost"
-				size="icon-sm"
-				aria-label="Settings"
-				onclick={() => layout.openTab({ kind: "settings", title: "Settings" })}
-			>
-				<Settings />
-			</Button>
+		<div class="ms-auto flex items-center gap-0.5">
+			<Tooltip.Root>
+				<Tooltip.Trigger>
+					{#snippet child({ props })}
+						<Button
+							{...props}
+							variant="ghost"
+							size="icon-sm"
+							class="text-muted-foreground hover:text-foreground {termPanel.open ? 'bg-sidebar-accent text-foreground' : ''}"
+							aria-label="Terminal panel"
+							aria-pressed={termPanel.open}
+							onclick={() => termPanel.toggle()}
+						>
+							<PanelBottom />
+						</Button>
+					{/snippet}
+				</Tooltip.Trigger>
+				<Tooltip.Content>{@render tip("Terminal panel", isMac ? "⌃`" : "Ctrl+`")}</Tooltip.Content>
+			</Tooltip.Root>
+			<Tooltip.Root>
+				<Tooltip.Trigger>
+					{#snippet child({ props })}
+						<Button {...props} variant="ghost" size="icon-sm" class="text-muted-foreground hover:text-foreground" aria-label="Toggle light or dark" onclick={toggleMode}>
+							{#if mode.current === "dark"}<Sun />{:else}<Moon />{/if}
+						</Button>
+					{/snippet}
+				</Tooltip.Trigger>
+				<Tooltip.Content>{mode.current === "dark" ? "Light theme" : "Dark theme"}</Tooltip.Content>
+			</Tooltip.Root>
+			<Tooltip.Root>
+				<Tooltip.Trigger>
+					{#snippet child({ props })}
+						<Button
+							{...props}
+							variant="ghost"
+							size="icon-sm"
+							class="text-muted-foreground hover:text-foreground"
+							aria-label="Settings"
+							onclick={() => layout.openTab({ kind: "settings", title: "Settings" })}
+						>
+							<Settings />
+						</Button>
+					{/snippet}
+				</Tooltip.Trigger>
+				<Tooltip.Content>{@render tip("Settings", isMac ? "⌘," : "Ctrl+,")}</Tooltip.Content>
+			</Tooltip.Root>
 		</div>
 	</div>
 </aside>
