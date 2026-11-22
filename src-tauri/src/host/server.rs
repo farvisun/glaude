@@ -558,6 +558,7 @@ impl Host {
                             effort: spec.effort.clone(),
                             mode: spec.permission_mode.clone(),
                             resume: spec.resume.clone(),
+                            fork: spec.fork,
                             load_history: !spec.skip_history,
                         },
                         sink,

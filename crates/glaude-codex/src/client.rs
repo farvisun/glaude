@@ -403,6 +403,8 @@ pub struct CodexSpec {
     /// UI mode: full | on-request | untrusted | read-only
     pub mode: Option<String>,
     pub resume: Option<String>,
+    /// With `resume`: continue in a copy of the thread (side chats).
+    pub fork: bool,
     pub load_history: bool,
 }
 
@@ -469,7 +471,12 @@ impl CodexThread {
             Some(tid) => {
                 params["threadId"] = json!(tid);
                 params["excludeTurns"] = json!(true);
-                server.request("thread/resume", params).await?
+                let method = if spec.fork {
+                    "thread/fork"
+                } else {
+                    "thread/resume"
+                };
+                server.request(method, params).await?
             }
             None => server.request("thread/start", params).await?,
         };

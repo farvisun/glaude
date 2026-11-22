@@ -14,6 +14,11 @@
 	import ArrowRightLeft from "@lucide/svelte/icons/arrow-right-left";
 	import Copy from "@lucide/svelte/icons/copy";
 	import X from "@lucide/svelte/icons/x";
+	import MessagesSquare from "@lucide/svelte/icons/messages-square";
+	import GitCompare from "@lucide/svelte/icons/git-compare";
+	import { conversations } from "$lib/state/conversations.svelte";
+	import { convActions } from "$lib/state/sessions";
+	import { ui } from "$lib/state/ui.svelte";
 
 	let {
 		paneId,
@@ -27,6 +32,10 @@
 	} = $props();
 
 	const subject = $derived(tabId ?? layout.findLeaf(paneId)?.active ?? null);
+	const subjectConv = $derived.by(() => {
+		const t = subject ? layout.tabs[subject] : undefined;
+		return t?.kind === "conversation" && t.ref ? conversations.get(t.ref) : undefined;
+	});
 	let native = $state(false);
 	let selection = $state("");
 
@@ -88,6 +97,15 @@
 			<ContextMenu.Separator />
 			<ContextMenu.Item onclick={() => navigator.clipboard?.writeText(selection)}>
 				<Copy /> Copy
+			</ContextMenu.Item>
+		{/if}
+		{#if subjectConv}
+			<ContextMenu.Separator />
+			<ContextMenu.Item onclick={() => subjectConv && convActions.sideChat(subjectConv)}>
+				<MessagesSquare /> Side chat
+			</ContextMenu.Item>
+			<ContextMenu.Item onclick={() => subjectConv && ui.openChanges(subjectConv.cwd)}>
+				<GitCompare /> Changes
 			</ContextMenu.Item>
 		{/if}
 		{#if tabId}

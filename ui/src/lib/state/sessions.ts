@@ -8,6 +8,7 @@ import { basename } from "$lib/format";
 import { history } from "./history.svelte";
 import { notifyPermission, notifyTurnDone, updateBadge } from "./notify";
 import { ui } from "./ui.svelte";
+import { triage } from "./triage.svelte";
 
 export interface StartSpec {
 	provider: Provider;
@@ -64,6 +65,7 @@ interface SavedConv {
 	spec: StartSpec;
 	title: string;
 	sessionId?: string;
+	sideOf?: string | null;
 }
 
 function loadSaved(): Record<string, SavedConv> {
@@ -79,7 +81,7 @@ function saveConv(conv: Conversation) {
 	if (!spec) return;
 	const all = loadSaved();
 	const { title: _t, resumeAt: _r, fork: _f, skipHistory: _s, ...base } = spec;
-	all[conv.id] = { spec: base, title: conv.title, sessionId: conv.session.sessionId ?? spec.resume };
+	all[conv.id] = { spec: base, title: conv.title, sessionId: conv.session.sessionId ?? spec.resume, sideOf: conv.sideOf };
 	localStorage.setItem(SAVED_KEY, JSON.stringify(all));
 }
 
@@ -116,6 +118,7 @@ export async function restoreConversations() {
 			sessionId: s.sessionId,
 		});
 		specs.set(id, s.spec);
+		conv.sideOf = s.sideOf ?? null;
 		if (live.has(id)) void attach(conv);
 		else conv.needsHistory = !!s.sessionId;
 	}
@@ -233,6 +236,7 @@ export function startIdleReaper() {
 
 /** Focus the tab of a past session if it is open, otherwise resume it. */
 export function openSession(s: { provider: Provider; id: string; cwd: string; title?: string; account?: string }) {
+	triage.visit(`${s.provider}:${s.id}`);
 	const open = Object.values(conversations.byId).find((c) => c.session.sessionId === s.id);
 	if (open) {
 		const tab = Object.values(layout.tabs).find((t) => t.ref === open.id);
@@ -303,6 +307,8 @@ export async function openLink(href: string) {
 export const convActions = {
 	async send(conv: Conversation, text: string, attachments: Attachment[]) {
 		conv.lastActivity = Date.now();
+		const btw = /^\/btw(?:\s+([\s\S]*))?$/.exec(text.trim());
+		if (btw) return convActions.sideChat(conv, btw[1]?.trim() || undefined);
 		try {
 			if (!(await ensureAlive(conv))) return;
 			if (conv.items.every((i) => i.kind !== "user") && text) {
@@ -341,6 +347,61 @@ export const convActions = {
 	},
 	async enqueue(conv: Conversation, text: string, attachments: Attachment[]) {
 		await convActions.setQueue(conv, [...conv.queue, { id: uid("q"), text, attachments }]);
+	},
+	/** A side chat: a fork of the conversation so far, in a pane beside it.
+	 *  It starts empty but the agent knows everything said up to now. */
+	async sideChat(conv: Conversation, question?: string) {
+		const prev = specs.get(conv.id);
+		const sid = conv.session.sessionId;
+		if (!prev || !sid) {
+			toast("Send a message first", { description: "A side chat starts from the conversation so far." });
+			return;
+		}
+		const tab = Object.values(layout.tabs).find((t) => t.kind === "conversation" && t.ref === conv.id);
+		const leaf = tab ? layout.leafOfTab(tab.id) : null;
+		const pane = (leaf && layout.splitNew(leaf.id, "right")) || undefined;
+		const side = await startConversation(
+			{
+				provider: prev.provider,
+				account: prev.account,
+				cwd: prev.cwd,
+				model: conv.session.model ?? prev.model,
+				effort: prev.effort,
+				permissionMode: conv.session.permissionMode ?? prev.permissionMode,
+				resume: sid,
+				fork: true,
+				skipHistory: true,
+				title: question ? `btw: ${question.replace(/\s+/g, " ").slice(0, 40)}` : `Side chat · ${conv.title}`,
+			},
+			pane,
+		);
+		if (!side) return;
+		side.sideOf = conv.id;
+		saveConv(side);
+		if (question) await convActions.send(side, question, []);
+	},
+	/** Put the side chat's last answer into its parent's message as a quote. */
+	addToParent(side: Conversation) {
+		const parent = side.sideOf ? conversations.get(side.sideOf) : undefined;
+		if (!parent) {
+			toast("The original conversation is closed");
+			return;
+		}
+		const last = [...side.items].reverse().find((i) => i.kind === "assistant");
+		if (!last || last.kind !== "assistant") {
+			toast("No answer yet");
+			return;
+		}
+		const div = document.createElement("div");
+		parent.quote = last.blocks
+			.map((b) => {
+				div.innerHTML = b.html;
+				return div.textContent ?? "";
+			})
+			.join("\n\n")
+			.trim();
+		const tab = Object.values(layout.tabs).find((t) => t.kind === "conversation" && t.ref === parent.id);
+		if (tab) layout.activate(tab.id);
 	},
 	/** Continue at `at` (RFC 3339), or cancel with null. */
 	async schedule(conv: Conversation, at: string | null) {
