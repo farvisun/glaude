@@ -5,9 +5,10 @@ built-in image tool. `src-tauri/icons/icon-source.png` is that art fitted to
 the macOS icon grid: an 824 px rounded square (radius 185) on a transparent
 1024 canvas, with a soft shadow. Every platform size is generated from it.
 
-Concept: a speech bubble drawn as a neural circuit, with a terminal prompt
-chevron inside. It stands for chat, AI and a developer tool. Colours: royal
-blue `#1f3cff`→`#0b1fa8`, white, and orange `#ff8a1f`.
+Concept: a ribbon modelled on the sweep of a Persian calligraphy stroke
+(abstract, not a letter), wrapped around a glowing sphere of light. It
+stands for Persian text and AI. Colours: terracotta `#8f3b1e`→`#c8663d`,
+cream `#fbe8cf` and gold `#f2c14e`.
 
 ## Rebuild
 
@@ -30,18 +31,18 @@ rm -rf icons/android icons/ios icons/Square*Logo.png icons/StoreLogo.png
 
 Run with `codex exec` (Codex's image tool), square output:
 
-> Subject: a speech bubble outline drawn as a glowing neural circuit (traces
-> and nodes forming the bubble shape), with a terminal prompt chevron in its
-> center and a small orb of light at one node. Palette: bold royal blue
-> background (#1f3cff to #0b1fa8), circuit bubble in crisp white, chevron and
-> orb in bright orange (#ff8a1f). Style: premium enterprise software app icon
-> for an AI developer tool, polished modern macOS-style illustration with real
-> depth: layered shapes, smooth gradients, soft studio lighting, subtle glass
-> and glow, crisp clean edges. Composition: one dominant bold shape plus two
-> or three supporting elements with a clear visual hierarchy, rich but not
-> cluttered, still readable at 32 pixels. Canvas: Square 1024x1024,
-> FULL-BLEED: the background fills the entire square edge to edge, no rounded
-> corners, no frame, no border, no outer drop shadow, no device mockup. Keep
-> the whole composition inside the central 62% of the canvas. Absolutely NO
-> text, letters, numbers, logos of other companies, UI writing or watermarks
-> anywhere.
+> Subject: a flowing ribbon inspired by the sweep of a Persian calligraphy
+> stroke (abstract, NOT a readable letter) wrapping around a glowing sphere of
+> light, with two tiny sparkles nearby. Palette: warm terracotta background
+> (#8f3b1e to #c8663d), ribbon in cream and soft gold (#fbe8cf, #f2c14e),
+> sphere in warm white with a peach glow. Style: premium enterprise software
+> app icon for an AI developer tool, polished modern macOS-style illustration
+> with real depth: layered shapes, smooth gradients, soft studio lighting,
+> subtle glass and glow, crisp clean edges. Composition: one dominant bold
+> shape plus two or three supporting elements with a clear visual hierarchy,
+> rich but not cluttered, still readable at 32 pixels. Canvas: Square
+> 1024x1024, FULL-BLEED: the background fills the entire square edge to edge,
+> no rounded corners, no frame, no border, no outer drop shadow, no device
+> mockup. Keep the whole composition inside the central 62% of the canvas.
+> Absolutely NO text, letters, numbers, logos of other companies, UI writing
+> or watermarks anywhere.
