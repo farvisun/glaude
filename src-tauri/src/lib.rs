@@ -1,5 +1,6 @@
 mod commands;
 mod conv;
+mod pty;
 mod sink;
 
 use tauri::Manager;
@@ -26,6 +27,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .manage(conv::Convs::default())
         .manage(conv::CodexPool::default())
+        .manage(pty::Ptys::default())
         .invoke_handler(tauri::generate_handler![
             commands::app_info,
             commands::default_cwd,
@@ -36,6 +38,10 @@ pub fn run() {
             commands::sessions_list,
             commands::codex_sessions_list,
             commands::codex_models,
+            pty::pty_open,
+            pty::pty_write,
+            pty::pty_resize,
+            pty::pty_close,
             conv::conv_start,
             conv::conv_send,
             conv::conv_interrupt,
@@ -49,6 +55,7 @@ pub fn run() {
         .run(|app, event| {
             if let tauri::RunEvent::Exit = event {
                 conv::close_all(&app.state::<conv::Convs>(), &app.state::<conv::CodexPool>());
+                pty::close_all(&app.state::<pty::Ptys>());
             }
         });
 }
