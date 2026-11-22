@@ -20,7 +20,48 @@ its own direction, keeps code left-to-right, and uses the Estedad font.
 - **Permission cards** inside the conversation (allow, always allow, deny),
   with the diff for edits. Other tabs keep working while one waits.
 - **Diff viewer** (unified or side by side) for Claude edits and Codex file changes.
-- **Sidebar, tabs and splits**: up to four panes; drag a tab to an edge to split.
+- **Agents keep working when Glaude is closed**: a background host
+  (`glaude --host`) owns the `claude`/`codex` processes. Tabs come back on
+  the next start, attached live if their agent is still running. With no
+  window open, idle conversations stop at once; a running turn, background
+  task, queued message or scheduled resume keeps going, and the host exits a
+  minute after the last one ends. A desktop notification says when an agent
+  finishes or needs an answer while no window is open.
+- **Queue and steer**: Enter while a turn runs queues the message (edit,
+  remove or send now above the composer); Cmd/Ctrl+Enter sends it into the
+  running turn (Codex `turn/steer`).
+- **Resume at the limit reset**: a turn that hits the usage limit shows when
+  it resets and can continue on its own then (or in 1, 3 or 5 hours), even
+  with Glaude closed.
+- **Composer**: ArrowUp/ArrowDown walk earlier prompts, Cmd/Ctrl+S stashes the
+  draft (restore it from the stash menu), select text in a reply to quote it.
+- **Side chats**: `/btw <question>` or *Side chat* in the tab menu opens a fork
+  of the conversation beside it; *Add to chat* quotes its answer back.
+- **File links**: paths in replies that exist (`src/main.rs:12`, relative
+  links, `file://`) open in your editor at the line (VS Code, Cursor, Zed or
+  the default app, in Settings), in a read-only viewer tab, in Finder, or in
+  a terminal there. Programs are never started from a link.
+- **Changes tab** (click the branch in the statusline, or Cmd/Ctrl+Shift+G):
+  uncommitted changes, the branch against its base, or one commit; filter by
+  path or text; leave notes on lines and send them to a conversation as a
+  review; commit (message written by a quick Haiku call if you like), push,
+  and create a pull request with `gh`.
+- **Worktree conversations**: start a conversation on its own branch in a new
+  git worktree. `.glaude.json` in the project can set up and clean up
+  worktrees and add actions (Dev, Test, ...) that run in a terminal tab:
+
+  ```json
+  {
+    "worktree": { "setup": "bun install", "cleanup": "docker compose down" },
+    "actions": [{ "name": "Dev", "command": "bun run dev" }]
+  }
+  ```
+- **Terminal drawer** under each conversation (Ctrl+\`), in its folder.
+- **Triage**: pin, snooze (an hour, this evening, tomorrow, next week) or
+  archive sessions in the sidebar, with Undo; Cmd/Ctrl+K ranks by how often
+  and how recently you opened them.
+- **Sidebar, tabs and splits**: up to eight panes; drag a tab to an edge, or
+  right-click a tab or pane to split it.
 - **Terminal tabs** (portable-pty + xterm.js), and *Open in terminal* to
   continue a session in the CLI's own TUI.
 - **Statusline**: model, effort, permission mode, folder, git branch,
@@ -119,7 +160,8 @@ crates/
   glaude-codex     codex app-server JSON-RPC client and thread translator
   glaude-accounts  mamadoo port: discovery, usage scan, limits, share, launch
   glaude-search    FTS5 history index
-src-tauri/         Tauri app: commands, event batching, PTYs, settings
+src-tauri/         Tauri app: commands, PTYs, settings, git, file links;
+                   `host/` is the background agent host (`glaude --host`)
 ui/                Svelte 5 + Tailwind + shadcn-svelte, xterm.js
 docs/              protocol notes and the mamadoo port spec
 fixtures/          recorded, scrubbed CLI sessions for tests

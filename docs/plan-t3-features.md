@@ -4,6 +4,9 @@ Goal (2026-11-22): port the eight T3 Code features picked in the review, and
 add three more: agents keep working while Glaude is closed, a terminal
 inside the conversation, and opening linked files and folders from the app.
 
+Status: all eleven are implemented (see the README features list and the
+host protocol in `protocols.md`).
+
 ## 1. Agent host (agents keep working when the app is closed)
 
 Today the app process owns every `claude`/`codex` process and kills them on

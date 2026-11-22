@@ -261,3 +261,40 @@ Recorded in `fixtures/claude/{agents-background,workflow,task-stop}.ndjson`.
 | `on-request` | `on-request` | `workspace-write` |
 | `untrusted` | `untrusted` | `workspace-write` |
 | `read-only` | `on-request` | `read-only` |
+
+## Glaude agent host (`glaude --host`)
+
+The app does not own agent processes; a background host does, so they keep
+working while the window is closed. Same binary, started detached (own
+process group, no stdio) by the app when none answers.
+
+- Socket: `<app data>/host.sock` (mode 0600; `$TMPDIR/glaude-<uid>.sock` if
+  that path is too long for `sun_path`), or the named pipe
+  `\\.\pipe\glaude-host-<user>` on Windows (remote clients rejected).
+- Auth: a random token in `<app data>/host.token` (0600), sent in `hello`.
+- JSON lines. Requests `{id, method, params}`, replies `{id, ok}` or
+  `{id, error}`. Events for attached conversations: `{conv, events}` where
+  `events` is the same `ConvEvent` batch the UI applies (merged every 24 ms).
+- `hello {token, proto, stamp}` → `{proto, stamp, busy, pid}`. The app
+  replaces a host from another build (different `stamp`) only when it is not
+  busy; `proto` changes when requests change incompatibly.
+- Methods: `list`, `start {convId, spec}`, `attach {convId}` (the whole state
+  first: `reset`, `session`, `limits`, tasks, `queue`, `schedule`, `turn`;
+  then the live stream), `detach`, `send`/`steer {text, attachments}`,
+  `queue {items}`, `schedule {resumeAt}`, `interrupt`, `permission`,
+  `answer_question`, `set_mode`, `set_model`, `control {request}` (an allow
+  list of Claude control requests), `hook_runs`, `close`, `shutdown`.
+- Queue: the host sends the next queued message when a turn ends (not while
+  a prompt waits or a usage limit holds).
+- Limits: a `limited` event (Claude `rate_limit_event` with
+  `status:"rejected"`, Codex `usageLimitExceeded`) or a turn error about a
+  usage limit becomes `schedule {limitedUntil}`; a `resumeAt` that comes due
+  sends "continue", restarting the agent on the same session if needed.
+- Lifetime with no client: idle conversations are stopped at once; busy ones
+  (turn running, running tasks, queue, scheduled resume, a pending prompt for
+  up to 6 hours) keep going. The host exits 60 s after it has no
+  conversations and no clients. Logs: `<app data>/host.log`.
+- Tests: `src-tauri/tests/host.rs` runs the host against a fake `claude`
+  (`GLAUDE_HOST_DIR`, `GLAUDE_HOST_QUIET_SECS` and `CLAUDE_BIN` point it at a
+  temp folder).
+
