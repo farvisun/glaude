@@ -1,10 +1,30 @@
 <script lang="ts">
-	import type { FileDiff } from "$lib/types";
+	import type { FileDiff, ReviewNote as Note } from "$lib/types";
 	import FileDiffIcon from "@lucide/svelte/icons/file-diff";
 	import Rows2 from "@lucide/svelte/icons/rows-2";
 	import Columns2 from "@lucide/svelte/icons/columns-2";
 
-	let { diffs, maxHeight = "24rem" }: { diffs: FileDiff[]; maxHeight?: string } = $props();
+	let {
+		diffs,
+		maxHeight = "24rem",
+		onLine,
+		notes = [],
+		onRemoveNote,
+	}: {
+		diffs: FileDiff[];
+		maxHeight?: string;
+		/** Clicking a line number: add a review note there. */
+		onLine?: (path: string, side: "a" | "b", n: number, code: string) => void;
+		notes?: Note[];
+		onRemoveNote?: (id: string) => void;
+	} = $props();
+
+	const lineKey = (l: { t: string; a?: number; b?: number }): ["a" | "b", number] | null =>
+		l.t === "del" && l.a != null ? ["a", l.a] : l.b != null ? ["b", l.b] : null;
+	function notesAt(path: string, l: { t: string; a?: number; b?: number }) {
+		const k = lineKey(l);
+		return k ? notes.filter((x) => x.path === path && x.side === k[0] && x.n === k[1]) : [];
+	}
 
 	const SPLIT_KEY = "glaude.diff.split";
 	let split = $state(localStorage.getItem(SPLIT_KEY) === "1");
@@ -77,7 +97,7 @@
 			<span class="text-ok ms-auto font-mono">+{d.added}</span>
 			<span class="text-destructive font-mono">−{d.removed}</span>
 			<button class="text-muted-foreground hover:text-foreground" aria-label="Toggle side by side" onclick={toggle}>
-				{#if split}<Rows2 class="size-3.5" />{:else}<Columns2 class="size-3.5" />{/if}
+				{#if split && !onLine}<Rows2 class="size-3.5" />{:else}<Columns2 class="size-3.5" />{/if}
 			</button>
 		</div>
 		<div class="scrollbar-thin selectable overflow-auto font-mono text-[12px] leading-[1.55]" style:max-height={maxHeight} dir="ltr">
@@ -102,9 +122,24 @@
 				<table class="w-full border-collapse">
 					<tbody>
 						{#each lines as l, i (i)}
-							<tr class={cls[l.t]}>
+							<tr class="{cls[l.t]} group/ln">
 								{#if l.t === "hunk"}
 									<td colspan="3" class="px-2">{l.text}</td>
+								{:else if onLine}
+									<td class="ln p-0" colspan="2">
+										<button
+											class="hover:bg-primary/15 hover:text-primary relative flex w-full justify-end gap-2 px-2"
+											aria-label="Comment on line {l.b ?? l.a}"
+											title="Comment on this line"
+											onclick={() => {
+												const k = lineKey(l);
+												if (k) onLine(d.path, k[0], k[1], l.text);
+											}}
+										>
+											<span class="text-primary absolute start-1 hidden group-hover/ln:inline">+</span>
+											<span class="w-[3ch]">{l.a ?? ""}</span><span class="w-[3ch]">{l.b ?? ""}</span>
+										</button>
+									</td>
 								{:else}
 									<td class="ln">{l.a ?? ""}</td>
 									<td class="ln">{l.b ?? ""}</td>
@@ -113,6 +148,19 @@
 									>
 								{/if}
 							</tr>
+							{#each notesAt(d.path, l) as note (note.id)}
+								<tr>
+									<td colspan="3" class="bg-card border-border border-y px-3 py-1.5 font-sans text-[13px]">
+										<div class="flex items-start gap-2">
+											<span class="text-primary shrink-0 text-xs font-medium">Note</span>
+											<span class="min-w-0 flex-1 whitespace-pre-wrap" dir="auto">{note.text}</span>
+											{#if onRemoveNote}
+												<button class="text-muted-foreground hover:text-foreground shrink-0 text-xs" onclick={() => onRemoveNote(note.id)}>Remove</button>
+											{/if}
+										</div>
+									</td>
+								</tr>
+							{/each}
 						{/each}
 					</tbody>
 				</table>

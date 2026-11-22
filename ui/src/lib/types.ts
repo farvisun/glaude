@@ -99,6 +99,16 @@ export interface TaskInfo {
 	parentTaskId?: string;
 }
 
+/** A review note on one diff line ("a" = old side, "b" = new side). */
+export interface ReviewNote {
+	id: string;
+	path: string;
+	side: "a" | "b";
+	n: number;
+	text: string;
+	code: string;
+}
+
 /** A message typed while a turn ran; sent when it ends. */
 export interface QueuedMessage {
 	id: string;

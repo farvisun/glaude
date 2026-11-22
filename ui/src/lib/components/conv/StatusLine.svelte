@@ -10,9 +10,11 @@
 	import User from "@lucide/svelte/icons/user";
 	import Timer from "@lucide/svelte/icons/timer";
 	import PanelRight from "@lucide/svelte/icons/panel-right";
+	import PanelBottom from "@lucide/svelte/icons/panel-bottom";
 	import SquareTerminal from "@lucide/svelte/icons/square-terminal";
 	import { openInTerminal } from "$lib/state/sessions";
-	import { prefs } from "$lib/state/prefs.svelte";
+	import { prefs, isMac } from "$lib/state/prefs.svelte";
+	import ProjectActions from "./ProjectActions.svelte";
 
 	let {
 		conv,
@@ -102,7 +104,12 @@
 					><Timer class="size-3" />{fmtDuration(elapsed)}</span
 				>
 			{/if}
-			{#if s.gitBranch}<span class="inline-flex items-center gap-1"><GitBranch class="size-3" />{s.gitBranch}</span>{/if}
+			{#if s.gitBranch}<button
+					class="hover:text-foreground inline-flex items-center gap-1"
+					title="Changes, commit, push and pull request ({isMac ? '⌘⇧G' : 'Ctrl+Shift+G'})"
+					onclick={() => ui.openChanges(conv.cwd)}><GitBranch class="size-3" />{s.gitBranch}</button
+				>{/if}
+			<ProjectActions cwd={conv.cwd} />
 			<span class="inline-flex max-w-48 shrink-0 items-center gap-1" title={conv.cwd}><Folder class="size-3 shrink-0" /><span class="truncate"
 					>{basename(conv.cwd)}</span
 				></span
@@ -124,6 +131,12 @@
 		title="Open in the {conv.provider === 'claude' ? 'Claude' : 'Codex'} terminal UI"
 		disabled={!s.sessionId}
 		onclick={() => openInTerminal(conv)}><SquareTerminal class="size-3.5" /></button
+	>
+	<button
+		class="hover:text-foreground shrink-0 {conv.drawer ? 'text-foreground' : ''}"
+		aria-label="Toggle terminal"
+		title="Terminal in {basename(conv.cwd)} (Ctrl+&#96;)"
+		onclick={() => (conv.drawer = !conv.drawer)}><PanelBottom class="size-3.5" /></button
 	>
 	<button
 		class="hover:text-foreground shrink-0 {prefs.progressPanel ? 'text-foreground' : ''}"
