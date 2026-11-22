@@ -4,12 +4,19 @@
 
 export type TabKind = "welcome" | "conversation" | "terminal" | "accounts" | "settings" | "search";
 
+/** What a terminal tab runs: a login shell, or a CLI's own TUI. */
+export interface TermSpec {
+	cwd?: string;
+	run?: { provider: "claude" | "codex"; account: string; resume?: string; login?: boolean };
+}
+
 export interface Tab {
 	id: string;
 	kind: TabKind;
 	title: string;
 	/** conversation id or terminal id, depending on kind */
 	ref?: string;
+	term?: TermSpec;
 }
 
 export interface Leaf {

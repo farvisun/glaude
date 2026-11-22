@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { ModeWatcher } from "mode-watcher";
+	import { ModeWatcher, mode } from "mode-watcher";
 	import { Toaster } from "$lib/components/ui/sonner";
 	import * as Tooltip from "$lib/components/ui/tooltip";
 	import * as Resizable from "$lib/components/ui/resizable";
@@ -7,6 +7,7 @@
 	import PaneView from "$lib/components/PaneView.svelte";
 	import NewConversationDialog from "$lib/components/NewConversationDialog.svelte";
 	import { convActions } from "$lib/state/sessions";
+	import { dispose as disposeTerminal, retheme } from "$lib/state/terminals";
 	import { layout } from "$lib/state/layout.svelte";
 	import { prefs, isMac } from "$lib/state/prefs.svelte";
 	import type { Pane } from "paneforge";
@@ -15,7 +16,15 @@
 
 	layout.onClose = (tab) => {
 		if (tab.kind === "conversation" && tab.ref) convActions.close(tab.ref);
+		if (tab.kind === "terminal") disposeTerminal(tab.id);
 	};
+
+	// Terminals read their colors from the theme variables.
+	$effect(() => {
+		void prefs.palette;
+		void mode.current;
+		requestAnimationFrame(retheme);
+	});
 
 	$effect(() => {
 		document.documentElement.dataset.palette = prefs.palette;
@@ -41,6 +50,9 @@
 	});
 
 	function onKey(e: KeyboardEvent) {
+		// Off macOS the shortcuts use Ctrl, which belongs to the shell
+		// (Ctrl+B, Ctrl+W) while a terminal has focus.
+		if (!isMac && (e.target as HTMLElement | null)?.closest?.(".xterm")) return;
 		const mod = isMac ? e.metaKey : e.ctrlKey;
 		if (mod && e.key.toLowerCase() === "b") {
 			e.preventDefault();

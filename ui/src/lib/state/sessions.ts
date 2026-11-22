@@ -7,6 +7,7 @@ import { layout, uid } from "./layout.svelte";
 import { basename } from "$lib/format";
 import { history } from "./history.svelte";
 import { notifyPermission, notifyTurnDone, updateBadge } from "./notify";
+import { ui } from "./ui.svelte";
 
 export interface StartSpec {
 	provider: Provider;
@@ -116,6 +117,29 @@ async function ensureAlive(conv: Conversation): Promise<boolean> {
 }
 
 type Perm = Extract<Item, { kind: "permission" }>;
+
+/** Hand a conversation to the CLI's own TUI in a terminal tab. The
+ *  structured process stops first so both never write the same session;
+ *  sending from the chat tab later resumes it again. */
+export async function openInTerminal(conv: Conversation) {
+	const sid = conv.session.sessionId;
+	if (!sid) {
+		showError("Nothing to open yet", "Send a message first so the session exists.");
+		return;
+	}
+	if (conv.running) {
+		showError("The agent is still working", "Stop the turn or wait for it to finish, then open it in the terminal.");
+		return;
+	}
+	try {
+		await call("conv_close", { convId: conv.id });
+	} catch {
+		/* already stopped */
+	}
+	conv.alive = false;
+	const tool = conv.provider === "claude" ? "claude" : "codex";
+	ui.openTerminal({ cwd: conv.cwd, run: { provider: conv.provider, account: conv.account, resume: sid } }, `${tool} · ${conv.title || "session"}`);
+}
 
 /** Open http(s)/mailto links from rendered messages in the system browser. */
 export async function openLink(href: string) {

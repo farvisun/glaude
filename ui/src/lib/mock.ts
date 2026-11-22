@@ -7,6 +7,7 @@ import { detectDir } from "./bidi";
 
 type Chan = MockChannel<ConvEvent[]>;
 const chans = new Map<string, Chan>();
+const ptys = new Map<string, { send: (t: string) => void; line: string }>();
 
 function esc(s: string) {
 	return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -210,6 +211,37 @@ export const mockBackend: Record<string, (args: Record<string, unknown>) => unkn
 	save_attachment: async (args) => ({ name: args.name, mime: args.mime, path: `/tmp/${args.name}` }),
 	pick_folder: async () => "/Users/demo/Projects/glaude",
 	default_cwd: async () => "/Users/demo/Projects/glaude",
+	// A tiny line-echo shell so terminal tabs work in the browser.
+	pty_open: async (args) => {
+		const id = args.id as string;
+		const out = args.onData as MockChannel<Uint8Array>;
+		const enc = new TextEncoder();
+		const send = (t: string) => out.push(enc.encode(t));
+		ptys.set(id, { send, line: "" });
+		send("\x1b[1;36mdemo\x1b[0m mock shell — سلام، این ترمینال آزمایشی است\r\n$ ");
+	},
+	pty_write: async (args) => {
+		const pty = ptys.get(args.id as string);
+		if (!pty) return;
+		for (const ch of args.data as string) {
+			if (ch === "\r") {
+				pty.send(`\r\n${pty.line ? `you typed: ${pty.line}\r\n` : ""}$ `);
+				pty.line = "";
+			} else if (ch === "\x7f") {
+				if (pty.line) {
+					pty.line = pty.line.slice(0, -1);
+					pty.send("\b \b");
+				}
+			} else {
+				pty.line += ch;
+				pty.send(ch);
+			}
+		}
+	},
+	pty_resize: async () => {},
+	pty_close: async (args) => {
+		ptys.delete(args.id as string);
+	},
 	codex_models: async () => [
 		{ value: "gpt-6.2-sol", label: "GPT-6.2-Sol", efforts: ["low", "medium", "high"] },
 		{ value: "gpt-6-luna", label: "GPT-6-Luna", efforts: ["low", "medium"] },

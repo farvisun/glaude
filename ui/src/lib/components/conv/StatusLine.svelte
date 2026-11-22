@@ -8,6 +8,8 @@
 	import User from "@lucide/svelte/icons/user";
 	import Timer from "@lucide/svelte/icons/timer";
 	import PanelRight from "@lucide/svelte/icons/panel-right";
+	import SquareTerminal from "@lucide/svelte/icons/square-terminal";
+	import { openInTerminal } from "$lib/state/sessions";
 	import { prefs } from "$lib/state/prefs.svelte";
 
 	let {
@@ -103,7 +105,14 @@
 		</span>
 	{/if}
 	<button
-		class="hover:text-foreground shrink-0 {scriptLine ? 'ms-auto' : ''} {prefs.progressPanel ? 'text-foreground' : ''}"
+		class="hover:text-foreground shrink-0 {scriptLine ? 'ms-auto' : ''} disabled:opacity-40"
+		aria-label="Open in the {conv.provider === 'claude' ? 'Claude' : 'Codex'} terminal UI"
+		title="Open in the {conv.provider === 'claude' ? 'Claude' : 'Codex'} terminal UI"
+		disabled={!s.sessionId}
+		onclick={() => openInTerminal(conv)}><SquareTerminal class="size-3.5" /></button
+	>
+	<button
+		class="hover:text-foreground shrink-0 {prefs.progressPanel ? 'text-foreground' : ''}"
 		aria-label="Toggle progress panel"
 		onclick={() => {
 			prefs.progressPanel = !prefs.progressPanel;

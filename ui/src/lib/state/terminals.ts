@@ -1,0 +1,211 @@
+// xterm.js instances live here, not in the tab component, so a terminal
+// keeps its PTY and scrollback when its tab moves to another pane or is
+// hidden. The component only lends it a host element.
+
+import { Terminal, type ITheme } from "@xterm/xterm";
+import "@xterm/xterm/css/xterm.css";
+import { FitAddon } from "@xterm/addon-fit";
+import { Unicode11Addon } from "@xterm/addon-unicode11";
+import { WebLinksAddon } from "@xterm/addon-web-links";
+import { call, channel, inTauri } from "$lib/ipc";
+import { openLink, showError } from "./sessions";
+import type { TermSpec } from "./layout.svelte";
+
+interface Entry {
+	term: Terminal;
+	fit: FitAddon;
+	el: HTMLDivElement;
+	spec: TermSpec;
+	/** PTY id; changes on restart. */
+	ptyId: string | null;
+	generation: number;
+	exited: boolean;
+	cols: number;
+	rows: number;
+}
+
+const entries = new Map<string, Entry>();
+
+const ANSI_DARK = {
+	black: "#1b2233",
+	red: "#f0716b",
+	green: "#7fd18b",
+	yellow: "#f2c66d",
+	blue: "#6fa8f5",
+	magenta: "#c79cf2",
+	cyan: "#5cc8bd",
+	white: "#d5dbe6",
+	brightBlack: "#5d6880",
+	brightRed: "#ff8f88",
+	brightGreen: "#9ee3a8",
+	brightYellow: "#ffd98a",
+	brightBlue: "#92bfff",
+	brightMagenta: "#dcb8ff",
+	brightCyan: "#84e0d6",
+	brightWhite: "#f4f7fb",
+};
+
+const ANSI_LIGHT = {
+	black: "#1c2333",
+	red: "#c4372f",
+	green: "#2c7a3a",
+	yellow: "#946200",
+	blue: "#2459b8",
+	magenta: "#8a3fb8",
+	cyan: "#0f7f76",
+	white: "#c9cfda",
+	brightBlack: "#5d6880",
+	brightRed: "#d9534c",
+	brightGreen: "#3a9a4b",
+	brightYellow: "#b07a00",
+	brightBlue: "#3b74d6",
+	brightMagenta: "#a259d1",
+	brightCyan: "#159a90",
+	brightWhite: "#ffffff",
+};
+
+function cssVar(name: string): string {
+	return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+function theme(): ITheme {
+	const dark = document.documentElement.classList.contains("dark");
+	const bg = cssVar("--code-bg") || (dark ? "#0d1628" : "#eef2f8");
+	const fg = cssVar("--foreground") || (dark ? "#e4eaf4" : "#15203a");
+	const primary = cssVar("--primary") || "#5cc8bd";
+	return {
+		background: bg,
+		foreground: fg,
+		cursor: primary,
+		cursorAccent: bg,
+		selectionBackground: primary + "55",
+		...(dark ? ANSI_DARK : ANSI_LIGHT),
+	};
+}
+
+/** Re-theme every terminal (light/dark or palette change). */
+export function retheme() {
+	const t = theme();
+	for (const e of entries.values()) e.term.options.theme = t;
+}
+
+function create(tabId: string, spec: TermSpec): Entry {
+	const el = document.createElement("div");
+	el.className = "h-full w-full";
+	const term = new Terminal({
+		allowProposedApi: true,
+		fontFamily: 'ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", "Estedad Variable", monospace',
+		fontSize: 13,
+		lineHeight: 1.15,
+		cursorBlink: true,
+		scrollback: 10000,
+		macOptionIsMeta: true,
+		theme: theme(),
+	});
+	const fit = new FitAddon();
+	term.loadAddon(fit);
+	term.loadAddon(new Unicode11Addon());
+	term.unicode.activeVersion = "11";
+	term.loadAddon(new WebLinksAddon((_e, uri) => openLink(uri)));
+	const entry: Entry = { term, fit, el, spec, ptyId: null, generation: 0, exited: false, cols: 80, rows: 24 };
+	term.onData((data) => {
+		if (entry.exited) {
+			if (data === "\r") void start(tabId, entry);
+			return;
+		}
+		if (entry.ptyId) call("pty_write", { id: entry.ptyId, data }).catch(() => {});
+	});
+	entries.set(tabId, entry);
+	return entry;
+}
+
+async function start(tabId: string, entry: Entry) {
+	if (entry.ptyId) await call("pty_close", { id: entry.ptyId }).catch(() => {});
+	entry.generation += 1;
+	const id = `${tabId}:${entry.generation}`;
+	entry.ptyId = id;
+	entry.exited = false;
+	const onData = await channel<ArrayBuffer | number[] | Uint8Array>((chunk) => {
+		if (entry.ptyId !== id) return;
+		entry.term.write(chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk as ArrayBuffer));
+	});
+	const onExit = await channel<number | null>((code) => {
+		if (entry.ptyId !== id) return;
+		entry.exited = true;
+		const note = code == null || code === 0 ? "Process exited" : `Process exited with code ${code}`;
+		entry.term.write(`\r\n\x1b[2m${note}. Press Enter to start it again.\x1b[0m\r\n`);
+	});
+	try {
+		await call("pty_open", {
+			id,
+			spec: { cwd: entry.spec.cwd ?? null, cols: entry.cols, rows: entry.rows, run: entry.spec.run ?? null },
+			onData: onData.raw,
+			onExit: onExit.raw,
+		});
+	} catch (e) {
+		entry.exited = true;
+		showError("Could not start the terminal", e);
+	}
+}
+
+/** Mount the terminal for `tabId` into `host`, creating it on first use. */
+export function attach(tabId: string, spec: TermSpec, host: HTMLElement): void {
+	let entry = entries.get(tabId);
+	const fresh = !entry;
+	if (!entry) entry = create(tabId, spec);
+	host.appendChild(entry.el);
+	if (fresh) entry.term.open(entry.el);
+	refit(tabId);
+	if (fresh) {
+		void enableWebgl(tabId);
+		void start(tabId, entry);
+	} else entry.term.refresh(0, entry.term.rows - 1);
+}
+
+/** Take the element out of the DOM without ending the process. */
+export function detach(tabId: string): void {
+	entries.get(tabId)?.el.remove();
+}
+
+export function refit(tabId: string): void {
+	const e = entries.get(tabId);
+	if (!e || !e.el.isConnected || e.el.clientWidth === 0) return;
+	try {
+		e.fit.fit();
+	} catch {
+		return;
+	}
+	const { cols, rows } = e.term;
+	if (cols === e.cols && rows === e.rows) return;
+	e.cols = cols;
+	e.rows = rows;
+	if (e.ptyId && !e.exited) call("pty_resize", { id: e.ptyId, cols, rows }).catch(() => {});
+}
+
+export function focus(tabId: string): void {
+	entries.get(tabId)?.term.focus();
+}
+
+/** End the process and free the terminal (tab closed). */
+export function dispose(tabId: string): void {
+	const e = entries.get(tabId);
+	if (!e) return;
+	entries.delete(tabId);
+	if (e.ptyId) call("pty_close", { id: e.ptyId }).catch(() => {});
+	e.term.dispose();
+	e.el.remove();
+}
+
+/** WebGL renderer for heavy output; falls back to the DOM renderer. */
+async function enableWebgl(tabId: string): Promise<void> {
+	const e = entries.get(tabId);
+	if (!e || !inTauri) return;
+	try {
+		const { WebglAddon } = await import("@xterm/addon-webgl");
+		const gl = new WebglAddon();
+		gl.onContextLoss(() => gl.dispose());
+		e.term.loadAddon(gl);
+	} catch {
+		/* DOM renderer is fine */
+	}
+}
