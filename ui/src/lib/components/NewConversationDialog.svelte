@@ -9,7 +9,7 @@
 	import { ui } from "$lib/state/ui.svelte";
 	import { permissionModes, startConversation, showError } from "$lib/state/sessions";
 	import { call } from "$lib/ipc";
-	import type { Provider } from "$lib/types";
+	import type { AgentInfo, Provider } from "$lib/types";
 
 	interface AccountOption {
 		provider: Provider;
@@ -53,6 +53,22 @@
 	let model = $state(last.model[last.provider]);
 	let accounts = $state<AccountOption[]>([]);
 	let starting = $state(false);
+	/** Claude: run the session as this agent ("" = the default). */
+	let agent = $state("");
+	let agentList = $state<AgentInfo[]>([]);
+	$effect(() => {
+		if (!ui.newConversationOpen || provider !== "claude") return;
+		const args = { account, cwd: cwd.trim() || null };
+		const t = setTimeout(() => {
+			call<AgentInfo[]>("claude_agents", args)
+				.then((list) => {
+					agentList = list;
+					if (agent && !list.some((a) => a.name === agent)) agent = "";
+				})
+				.catch(() => (agentList = []));
+		}, 200);
+		return () => clearTimeout(t);
+	});
 
 	const claudeModels = [
 		{ value: "", label: "Default" },
@@ -120,7 +136,14 @@
 		};
 		localStorage.setItem(LAST_KEY, JSON.stringify(next));
 		ui.newConversationOpen = false;
-		await startConversation({ provider, account, cwd: cwd.trim(), model: model || undefined, permissionMode: mode });
+		await startConversation({
+			provider,
+			account,
+			cwd: cwd.trim(),
+			model: model || undefined,
+			permissionMode: mode,
+			agent: provider === "claude" && agent ? agent : undefined,
+		});
 		starting = false;
 	}
 </script>
@@ -197,6 +220,26 @@
 					</Select.Root>
 				</div>
 			</div>
+
+			{#if provider === "claude" && agentList.length}
+				<div class="flex flex-col gap-1.5">
+					<Label>Agent</Label>
+					<Select.Root type="single" bind:value={agent}>
+						<Select.Trigger class="w-full">{agent || "Default (Claude)"}</Select.Trigger>
+						<Select.Content class="max-h-72">
+							<Select.Item value="" label="Default (Claude)">Default (Claude)</Select.Item>
+							{#each agentList as a (a.name)}
+								<Select.Item value={a.name} label={a.name}>
+									<span class="flex min-w-0 flex-col">
+										<span>{a.name}</span>
+										{#if a.description}<span class="text-muted-foreground line-clamp-1 text-xs">{a.description}</span>{/if}
+									</span>
+								</Select.Item>
+							{/each}
+						</Select.Content>
+					</Select.Root>
+				</div>
+			{/if}
 
 			<div class="flex flex-col gap-1.5">
 				<Label>Permissions</Label>

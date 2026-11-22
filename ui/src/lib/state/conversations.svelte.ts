@@ -2,7 +2,7 @@
 // this store applies them. Items live in a $state.raw array that is
 // replaced (not mutated) so only changed rows re-render.
 
-import type { ConvEvent, Item, Limits, Provider, SessionInfo, TurnState } from "$lib/types";
+import type { ConvEvent, Item, Limits, Provider, SessionInfo, TaskInfo, TurnState } from "$lib/types";
 import { badges } from "./badges.svelte";
 
 export interface ConvSpec {
@@ -31,6 +31,12 @@ export class Conversation {
 	/** Last event or message (ms); used to stop idle processes. Not reactive. */
 	lastActivity = Date.now();
 	loading = $state(false);
+	/** Subagents, background shells, monitors and workflows, by task id. */
+	tasks = $state<Record<string, TaskInfo>>({});
+	/** Estimated tokens produced in the current turn. */
+	turnTokens = $state(0);
+	/** Text to put back into the composer (after a rewind). */
+	draft = $state<string | null>(null);
 
 	private index = new Map<string, number>();
 
@@ -44,11 +50,29 @@ export class Conversation {
 	}
 
 	get pendingPermissions(): number {
-		return this.items.filter((i) => i.kind === "permission" && i.status === "pending").length;
+		return this.items.filter((i) => (i.kind === "permission" || i.kind === "question") && i.status === "pending").length;
+	}
+
+	/** The task a tool call started (Agent, Bash in background, Workflow). */
+	taskFor(toolUseId: string): TaskInfo | undefined {
+		for (const t of Object.values(this.tasks)) if (t.toolUseId === toolUseId) return t;
+		return undefined;
+	}
+
+	get runningTasks(): TaskInfo[] {
+		return Object.values(this.tasks).filter((t) => t.status === "running" || t.status === "pending");
 	}
 
 	get running(): boolean {
 		return this.turn !== "idle";
+	}
+
+	/** Drop a message and everything after it (conversation rewind). */
+	truncateBefore(itemId: string) {
+		const at = this.items.findIndex((i) => i.id === itemId);
+		if (at < 0) return;
+		this.items = this.items.slice(0, at);
+		this.reindex();
 	}
 
 	private reindex() {
@@ -105,7 +129,10 @@ export class Conversation {
 				break;
 			}
 			case "turn":
-				if (this.turn === "idle" && ev.state !== "idle") this.turnStartedAt = Date.now();
+				if (this.turn === "idle" && ev.state !== "idle") {
+					this.turnStartedAt = Date.now();
+					this.turnTokens = 0;
+				}
 				this.turn = ev.state;
 				this.turnDetail = ev.detail;
 				break;
@@ -118,17 +145,31 @@ export class Conversation {
 			case "session":
 				this.session = { ...this.session, ...ev.info };
 				break;
+			case "task":
+				this.tasks = { ...this.tasks, [ev.task.id]: ev.task };
+				break;
+			case "tokens":
+				this.turnTokens = ev.tokens;
+				break;
 			case "limits":
 				this.limits = { ...this.limits, ...ev.limits };
 				break;
 			case "reset":
 				this.items = ev.items;
 				this.reindex();
+				if (ev.items.length === 0) this.tasks = {};
 				break;
-			case "exited":
+			case "exited": {
 				this.alive = false;
 				this.turn = "idle";
+				// Background work dies with the process.
+				const now = Date.now();
+				const next = { ...this.tasks };
+				for (const t of Object.values(next))
+					if (t.status === "running" || t.status === "pending") next[t.id] = { ...t, status: "stopped", endedAt: now };
+				this.tasks = next;
 				break;
+			}
 			case "notice":
 				break;
 		}
@@ -136,7 +177,10 @@ export class Conversation {
 	}
 
 	private updateBadge() {
-		badges.set(this.id, this.pendingPermissions > 0 ? "attention" : this.running ? "running" : null);
+		badges.set(
+			this.id,
+			this.pendingPermissions > 0 ? "attention" : this.running || this.runningTasks.length > 0 ? "running" : null,
+		);
 	}
 }
 

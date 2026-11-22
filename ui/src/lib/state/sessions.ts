@@ -21,6 +21,10 @@ export interface StartSpec {
 	fork?: boolean;
 	skipHistory?: boolean;
 	title?: string;
+	/** Claude: resume only up to this message (rewind). */
+	resumeAt?: string;
+	/** Claude: run the session as this agent. */
+	agent?: string;
 }
 
 export function permissionModes(p: Provider): { value: string; label: string }[] {
@@ -65,7 +69,9 @@ function onBatch(conv: Conversation, batch: ConvEvent[]) {
 			history.refreshSoon();
 			notifyTurnDone(conv, ev.error);
 		} else if (ev.type === "item" && ev.item.kind === "permission" && ev.item.status === "pending") {
-			notifyPermission(conv, ev.item.tool);
+			notifyPermission(conv, ev.item.tool === "ExitPlanMode" ? "plan" : ev.item.tool);
+		} else if (ev.type === "item" && ev.item.kind === "question" && ev.item.status === "pending") {
+			notifyPermission(conv, "question");
 		}
 	}
 	if (conv.loading && batch.some((e) => e.type === "reset" || e.type === "session")) conv.loading = false;
@@ -111,7 +117,7 @@ export function startIdleReaper() {
 	reaper = setInterval(() => {
 		const now = Date.now();
 		for (const conv of Object.values(conversations.byId)) {
-			if (!conv.alive || conv.running || conv.pendingPermissions > 0) continue;
+			if (!conv.alive || conv.running || conv.pendingPermissions > 0 || conv.runningTasks.length > 0) continue;
 			if (now - conv.lastActivity < IDLE_MS) continue;
 			conv.alive = false;
 			call("conv_close", { convId: conv.id }).catch(() => {});
@@ -146,6 +152,15 @@ async function ensureAlive(conv: Conversation): Promise<boolean> {
 }
 
 type Perm = Extract<Item, { kind: "permission" }>;
+
+export interface HookRun {
+	name: string;
+	event: string;
+	outcome: string;
+	exitCode?: number;
+	output: string;
+	at: number;
+}
 
 /** Hand a conversation to the CLI's own TUI in a terminal tab. The
  *  structured process stops first so both never write the same session;
@@ -202,7 +217,7 @@ export const convActions = {
 			showError("Could not stop the turn", e);
 		}
 	},
-	async decide(conv: Conversation, item: Perm, optionId: string, message?: string) {
+	async decide(conv: Conversation, item: { requestId: string }, optionId: string, message?: string) {
 		try {
 			await call("conv_permission", { convId: conv.id, requestId: item.requestId, optionId, message: message ?? null });
 			setTimeout(updateBadge, 100);
@@ -242,6 +257,94 @@ export const convActions = {
 			showError("Could not attach the image", e);
 			return null;
 		}
+	},
+	async answerQuestion(conv: Conversation, item: Extract<Item, { kind: "question" }>, answers: Record<string, string>) {
+		try {
+			await call("conv_answer_question", { convId: conv.id, requestId: item.requestId, answers });
+			setTimeout(updateBadge, 100);
+		} catch (e) {
+			showError("Could not send your answer", e);
+		}
+	},
+	/** A control request to the running Claude process (panels, tasks, rewind). */
+	async control<T = unknown>(conv: Conversation, request: Record<string, unknown>): Promise<T> {
+		if (!(await ensureAlive(conv))) throw new Error("The conversation is not running");
+		return call<T>("conv_control", { convId: conv.id, request });
+	},
+	async stopTask(conv: Conversation, taskId: string) {
+		try {
+			await convActions.control(conv, { subtype: "stop_task", task_id: taskId });
+		} catch (e) {
+			showError("Could not stop the task", e);
+		}
+	},
+	/** Output of a background shell/monitor: live from the CLI, else its file. */
+	async taskOutput(conv: Conversation, taskId: string, outputFile?: string): Promise<string> {
+		if (conv.alive) {
+			try {
+				const r = await call<{ output: string }>("conv_control", {
+					convId: conv.id,
+					request: { subtype: "get_task_output", task_id: taskId },
+				});
+				return r.output ?? "";
+			} catch {
+				/* fall back to the file */
+			}
+		}
+		if (outputFile) return call<string>("task_output_file", { path: outputFile });
+		throw new Error("The output is no longer available");
+	},
+	/** Files Claude changed since a user message (dry run), or undo them. */
+	async rewindFiles(conv: Conversation, userId: string, dryRun: boolean) {
+		return convActions.control<{ canRewind: boolean; error?: string; filesChanged?: string[]; insertions?: number; deletions?: number }>(
+			conv,
+			{ subtype: "rewind_files", user_message_id: userId, dry_run: dryRun },
+		);
+	},
+	/** Restart the conversation from just before a user message, as a fork.
+	 *  The message goes back into the composer. */
+	async rewindConversation(conv: Conversation, userId: string, text: string) {
+		const prev = specs.get(conv.id);
+		const sid = conv.session.sessionId;
+		if (!prev || !sid) {
+			showError("Can't rewind yet", "The session has not started.");
+			return false;
+		}
+		try {
+			const target = await call<string | null>("claude_rewind_target", {
+				account: conv.account,
+				cwd: conv.cwd,
+				sessionId: sid,
+				userUuid: userId,
+			});
+			try {
+				await call("conv_close", { convId: conv.id });
+			} catch {
+				/* already stopped */
+			}
+			conv.alive = false;
+			conv.truncateBefore(userId);
+			conv.tasks = {};
+			const ok = await connect(conv, {
+				...prev,
+				resume: target ? sid : undefined,
+				resumeAt: target ?? undefined,
+				fork: !!target,
+				skipHistory: true,
+				model: conv.session.model ?? prev.model,
+				permissionMode: conv.session.permissionMode ?? prev.permissionMode,
+			});
+			if (!target) conv.session = { ...conv.session, sessionId: undefined };
+			conv.draft = text;
+			return ok;
+		} catch (e) {
+			showError("Could not rewind the conversation", e);
+			return false;
+		}
+	},
+	async hookRuns(conv: Conversation): Promise<HookRun[]> {
+		if (!conv.alive) return [];
+		return call<HookRun[]>("conv_hook_runs", { convId: conv.id });
 	},
 	async close(convId: string) {
 		specs.delete(convId);

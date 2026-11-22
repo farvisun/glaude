@@ -5,7 +5,10 @@
 	import Paperclip from "@lucide/svelte/icons/paperclip";
 	import X from "@lucide/svelte/icons/x";
 	import { detectDir } from "$lib/bidi";
-	import type { Attachment } from "$lib/types";
+	import type { AgentInfo, Attachment } from "$lib/types";
+	import Bot from "@lucide/svelte/icons/bot";
+	import FileIcon from "@lucide/svelte/icons/file";
+	import Folder from "@lucide/svelte/icons/folder";
 
 	let {
 		running,
@@ -16,6 +19,10 @@
 		onStop,
 		onAttach,
 		onPasteImage,
+		agents = [],
+		onSuggestFiles,
+		onCycleMode,
+		modeHint,
 	}: {
 		running: boolean;
 		disabled?: boolean;
@@ -25,6 +32,14 @@
 		onStop: () => void;
 		onAttach?: () => Promise<Attachment[]>;
 		onPasteImage?: (blob: Blob, name: string) => Promise<Attachment | null>;
+		/** For @agent-<name> mentions. */
+		agents?: AgentInfo[];
+		/** For @file mentions; paths relative to the project. */
+		onSuggestFiles?: (query: string) => Promise<string[]>;
+		/** Shift+Tab: next permission mode. */
+		onCycleMode?: () => void;
+		/** Shown under the input, e.g. "plan mode on". */
+		modeHint?: string;
 	} = $props();
 
 	let text = $state("");
@@ -42,6 +57,68 @@
 	const slashMatches = $derived(
 		slashQuery === null ? [] : slashCommands.filter((c) => c.toLowerCase().startsWith(slashQuery)).slice(0, 8),
 	);
+
+	// @ mentions: agents and files, for the word being typed at the caret.
+	let caret = $state(0);
+	const mention = $derived.by(() => {
+		const m = /(^|\s)@([^\s@]*)$/.exec(text.slice(0, caret));
+		return m ? { query: m[2], start: caret - m[2].length - 1 } : null;
+	});
+	let files = $state<string[]>([]);
+	$effect(() => {
+		const q = mention?.query;
+		if (q === undefined || !onSuggestFiles || q.startsWith("agent-")) {
+			files = [];
+			return;
+		}
+		let stale = false;
+		const t = setTimeout(() => {
+			onSuggestFiles(q)
+				.then((r) => !stale && (files = r))
+				.catch(() => !stale && (files = []));
+		}, 120);
+		return () => {
+			stale = true;
+			clearTimeout(t);
+		};
+	});
+	/** Escape closes the menu for the mention that starts here. */
+	let dismissedAt = $state(-1);
+	type Suggestion = { kind: "agent" | "file" | "folder"; insert: string; label: string; detail?: string };
+	const mentionMatches = $derived.by((): Suggestion[] => {
+		if (!mention || mention.start === dismissedAt) return [];
+		const q = mention.query.toLowerCase().replace(/^agent-?/, "");
+		const a = agents
+			.filter((x) => !q || x.name.toLowerCase().includes(q))
+			.slice(0, mention.query.startsWith("agent") ? 8 : 4)
+			.map((x): Suggestion => ({ kind: "agent", insert: `agent-${x.name}`, label: `agent-${x.name}`, detail: x.description }));
+		const f = files.slice(0, 8).map((p): Suggestion => ({ kind: p.endsWith("/") ? "folder" : "file", insert: p, label: p }));
+		return [...a, ...f].slice(0, 10);
+	});
+
+	function pickMention(s: Suggestion) {
+		if (!mention) return;
+		// Folders keep the menu open to go deeper.
+		const tail = s.kind === "folder" ? "" : " ";
+		const before = text.slice(0, mention.start) + "@" + s.insert + tail;
+		text = before + text.slice(caret);
+		menuIndex = 0;
+		queueMicrotask(() => {
+			if (!el) return;
+			el.focus();
+			el.setSelectionRange(before.length, before.length);
+			caret = before.length;
+		});
+	}
+
+	/** Put text into the input (after a rewind). */
+	export function setText(t: string) {
+		text = t;
+		queueMicrotask(() => {
+			el?.focus();
+			if (el) caret = el.selectionStart = el.selectionEnd = t.length;
+		});
+	}
 
 	function autosize() {
 		if (!el) return;
@@ -67,6 +144,29 @@
 	}
 
 	function onKey(e: KeyboardEvent) {
+		if (e.key === "Tab" && e.shiftKey && onCycleMode) {
+			e.preventDefault();
+			onCycleMode();
+			return;
+		}
+		if (!slashMatches.length && mentionMatches.length) {
+			if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+				e.preventDefault();
+				const d = e.key === "ArrowDown" ? 1 : -1;
+				menuIndex = (menuIndex + d + mentionMatches.length) % mentionMatches.length;
+				return;
+			}
+			if (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey)) {
+				e.preventDefault();
+				pickMention(mentionMatches[Math.min(menuIndex, mentionMatches.length - 1)]);
+				return;
+			}
+			if (e.key === "Escape") {
+				e.preventDefault();
+				dismissedAt = mention?.start ?? -1;
+				return;
+			}
+		}
 		if (slashMatches.length) {
 			if (e.key === "ArrowDown" || e.key === "ArrowUp") {
 				e.preventDefault();
@@ -145,6 +245,31 @@
 		</div>
 	{/if}
 
+	{#if !slashMatches.length && mentionMatches.length}
+		<div
+			class="bg-popover border-border scrollbar-thin absolute inset-x-2 bottom-full mb-1.5 max-h-72 overflow-y-auto rounded-lg border py-1 shadow-md"
+			role="listbox"
+		>
+			{#each mentionMatches as s, i (s.kind + s.insert)}
+				<button
+					class="flex w-full min-w-0 items-center gap-2 px-3 py-1 text-start text-[13px] {i === menuIndex ? 'bg-accent' : ''}"
+					role="option"
+					aria-selected={i === menuIndex}
+					onmousedown={(e) => {
+						e.preventDefault();
+						pickMention(s);
+					}}
+				>
+					{#if s.kind === "agent"}<Bot class="text-muted-foreground size-3.5 shrink-0" />{:else if s.kind === "folder"}<Folder
+							class="text-muted-foreground size-3.5 shrink-0"
+						/>{:else}<FileIcon class="text-muted-foreground size-3.5 shrink-0" />{/if}
+					<span class="shrink-0 font-mono" dir="ltr">@{s.label}</span>
+					{#if s.detail}<span class="text-muted-foreground min-w-0 truncate text-xs" dir="auto">{s.detail}</span>{/if}
+				</button>
+			{/each}
+		</div>
+	{/if}
+
 	{#if attachments.length}
 		<div class="flex flex-wrap gap-1.5 px-3 pt-2.5">
 			{#each attachments as a, i (a.path)}
@@ -167,6 +292,9 @@
 		rows="1"
 		{placeholder}
 		class="placeholder:text-muted-foreground block max-h-[280px] w-full resize-none bg-transparent px-3.5 pt-3 pb-1 text-[15px] leading-7 outline-none"
+		oninput={() => (caret = el?.selectionStart ?? text.length)}
+		onkeyup={() => (caret = el?.selectionStart ?? text.length)}
+		onclick={() => (caret = el?.selectionStart ?? text.length)}
 		onkeydown={onKey}
 		onpaste={onPaste}
 	></textarea>
@@ -174,6 +302,13 @@
 	<div class="flex items-center gap-1 px-2 pb-2">
 		{#if onAttach}
 			<Button variant="ghost" size="icon-sm" aria-label="Attach files" onclick={attach}><Paperclip /></Button>
+		{/if}
+		{#if modeHint}
+			<button
+				class="text-muted-foreground hover:text-foreground truncate text-xs"
+				title="Shift+Tab to change the permission mode"
+				onclick={() => onCycleMode?.()}>{modeHint}</button
+			>
 		{/if}
 		<div class="ms-auto flex items-center gap-1">
 			{#if running}

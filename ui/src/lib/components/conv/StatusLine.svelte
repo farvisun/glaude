@@ -1,4 +1,6 @@
 <script lang="ts">
+	import Layers from "@lucide/svelte/icons/layers";
+	import { ui } from "$lib/state/ui.svelte";
 	import type { Conversation } from "$lib/state/conversations.svelte";
 	import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
 	import LimitBar from "./LimitBar.svelte";
@@ -76,10 +78,14 @@
 		{/if}
 
 		{#if ctxPct != null}
-			<span title="Context used: {fmtTokens(s.contextUsed)} of {fmtTokens(s.contextWindow)}"
+			<button
+				class="hover:text-foreground disabled:cursor-default"
+				disabled={conv.provider !== "claude"}
+				title="Context used: {fmtTokens(s.contextUsed)} of {fmtTokens(s.contextWindow)}"
+				onclick={() => (ui.sessionPanel = { convId: conv.id, tab: "context" })}
 				>ctx <span class="{ctxPct >= 90 ? 'text-destructive' : ctxPct >= 70 ? 'text-attention' : 'text-foreground'}"
 					>{ctxPct}%</span
-				></span
+				></button
 			>
 		{/if}
 		{#if s.costUsd != null}<span >{fmtCost(s.costUsd)}</span>{/if}
@@ -104,8 +110,16 @@
 			<span class="inline-flex min-w-0 items-center gap-1"><User class="size-3 shrink-0" /><span class="truncate">{conv.account}</span></span>
 		</span>
 	{/if}
+	{#if conv.provider === "claude"}
+		<button
+			class="hover:text-foreground shrink-0 {scriptLine ? 'ms-auto' : ''}"
+			aria-label="Session details"
+			title="Session: context, MCP, skills, agents, hooks, memory, style"
+			onclick={() => (ui.sessionPanel = { convId: conv.id })}><Layers class="size-3.5" /></button
+		>
+	{/if}
 	<button
-		class="hover:text-foreground shrink-0 {scriptLine ? 'ms-auto' : ''} disabled:opacity-40"
+		class="hover:text-foreground shrink-0 {scriptLine && conv.provider !== 'claude' ? 'ms-auto' : ''} disabled:opacity-40"
 		aria-label="Open in the {conv.provider === 'claude' ? 'Claude' : 'Codex'} terminal UI"
 		title="Open in the {conv.provider === 'claude' ? 'Claude' : 'Codex'} terminal UI"
 		disabled={!s.sessionId}

@@ -3,7 +3,7 @@
 	//   ✻ Pondering… (12s · esc to interrupt)
 	import type { Conversation } from "$lib/state/conversations.svelte";
 	import { ticker } from "$lib/state/ticker.svelte";
-	import { fmtDuration } from "$lib/format";
+	import { fmtDuration, fmtTokens } from "$lib/format";
 	import Spark from "./Spark.svelte";
 	import Shimmer from "./Shimmer.svelte";
 
@@ -38,7 +38,11 @@
 		return conv.turnStartedAt ? Math.max(0, Date.now() - conv.turnStartedAt) : null;
 	});
 
-	const meta = $derived([elapsed != null ? fmtDuration(elapsed) : null, "esc to interrupt"].filter(Boolean).join(" · "));
+	const meta = $derived(
+		[elapsed != null ? fmtDuration(elapsed) : null, conv.turnTokens ? `↓ ${fmtTokens(conv.turnTokens)} tokens` : null, "esc to interrupt"]
+			.filter(Boolean)
+			.join(" · "),
+	);
 
 	const color = $derived(conv.provider === "codex" ? "var(--codex)" : "var(--claude)");
 </script>

@@ -40,7 +40,9 @@ export function notifyTurnDone(conv: Conversation, error?: string) {
 export function notifyPermission(conv: Conversation, tool: string) {
 	updateBadge();
 	if (visible(conv)) return;
-	void send(label(conv), `Needs your approval to use ${tool}.`);
+	const body =
+		tool === "question" ? "Has a question for you." : tool === "plan" ? "Finished a plan for you to review." : `Needs your approval to use ${tool}.`;
+	void send(label(conv), body);
 	if (inTauri)
 		import("@tauri-apps/api/window").then(({ getCurrentWindow }) =>
 			getCurrentWindow()

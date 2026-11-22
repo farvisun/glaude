@@ -10,6 +10,9 @@
 	import TurnIndicator from "./TurnIndicator.svelte";
 	import { tick } from "svelte";
 	import { call } from "$lib/ipc";
+	import { ui } from "$lib/state/ui.svelte";
+	import { groupItems } from "$lib/state/group";
+	import Spark from "./Spark.svelte";
 
 	let { convId, active }: { convId: string; active: boolean } = $props();
 
@@ -48,7 +51,7 @@
 	});
 	let scroller = $state<HTMLDivElement>();
 	let atBottom = $state(true);
-	let composer = $state<{ focus: () => void }>();
+	let composer = $state<{ focus: () => void; setText: (t: string) => void }>();
 
 	function onClick(e: MouseEvent) {
 		const a = (e.target as HTMLElement).closest("a[href]") as HTMLAnchorElement | null;
@@ -84,10 +87,68 @@
 	const providerLabel = $derived(conv?.provider === "codex" ? "Codex" : "Claude");
 	const modes = $derived(conv ? permissionModes(conv.provider) : []);
 
-	type Perm = Extract<Item, { kind: "permission" }>;
-	function decide(item: Perm, optionId: string, message?: string) {
+	function decide(item: { requestId: string }, optionId: string, message?: string) {
 		if (conv) convActions.decide(conv, item, optionId, message);
 	}
+
+	const view = $derived(groupItems(conv?.items ?? []));
+
+	const taskOf = (it: Item) => (it.kind === "tool" && conv ? conv.taskFor(it.id) : undefined);
+
+	// Text put back after a rewind.
+	$effect(() => {
+		if (conv?.draft != null && composer) {
+			composer.setText(conv.draft);
+			conv.draft = null;
+		}
+	});
+
+	const canRewind = $derived(conv?.provider === "claude" && !!conv.session.sessionId);
+
+	// Shift+Tab walks the permission modes; bypass is only chosen on purpose.
+	function cycleMode() {
+		if (!conv) return;
+		const list = modes.map((m) => m.value).filter((v) => v !== "bypassPermissions");
+		const cur = conv.session.permissionMode ?? list[0];
+		const next = list[(list.indexOf(cur) + 1) % list.length];
+		conv.session = { ...conv.session, permissionMode: next };
+		convActions.setMode(conv, next);
+	}
+	const modeHint = $derived.by(() => {
+		if (conv?.provider !== "claude") return undefined;
+		switch (conv.session.permissionMode) {
+			case "plan":
+				return "⏸ plan mode on (shift+tab to cycle)";
+			case "acceptEdits":
+				return "⏵⏵ accept edits on (shift+tab to cycle)";
+			case "auto":
+				return "⏵⏵ auto mode on (shift+tab to cycle)";
+			case "bypassPermissions":
+				return "⏵⏵ bypass permissions on (shift+tab to cycle)";
+			default:
+				return undefined;
+		}
+	});
+
+	async function suggestFiles(query: string): Promise<string[]> {
+		if (!conv || conv.provider !== "claude" || !conv.alive) return [];
+		const r = await call<{ suggestions?: { path: string }[] }>("conv_control", {
+			convId: conv.id,
+			request: { subtype: "file_suggestions", query },
+		});
+		return (r.suggestions ?? []).map((s) => s.path);
+	}
+
+	const background = $derived(conv?.runningTasks ?? []);
+	const backgroundLabel = $derived.by(() => {
+		const agents = background.filter((t) => t.kind === "agent").length;
+		const flows = background.filter((t) => t.kind === "workflow").length;
+		const other = background.length - agents - flows;
+		const part = (n: number, one: string, many: string) => (n ? `${n} ${n === 1 ? one : many}` : null);
+		return [part(agents, "agent", "agents"), part(flows, "workflow", "workflows"), part(other, "shell", "shells")]
+			.filter(Boolean)
+			.join(", ");
+	});
 </script>
 
 {#if conv}
@@ -107,13 +168,36 @@
 							Ask {providerLabel} anything about <span class="text-foreground font-mono" dir="ltr">{conv.cwd}</span>.
 						</div>
 					{/if}
-					{#each conv.items as item (item.id)}
+					{#each view.main as item (item.id)}
 						<div class="cv-row">
-							<ItemView {item} {providerLabel} provider={conv.provider} thoughtFor={(id) => conv.thoughtFor(id)} onDecide={decide} />
+							<ItemView
+								{item}
+								{providerLabel}
+								provider={conv.provider}
+								thoughtFor={(id) => conv.thoughtFor(id)}
+								onDecide={decide}
+								task={taskOf(item)}
+								steps={view.steps[item.id]}
+								onStopTask={(id) => convActions.stopTask(conv, id)}
+								onTaskOutput={(id) => (ui.taskOutput = { convId: conv.id, taskId: id })}
+								onAnswer={(q, answers) => convActions.answerQuestion(conv, q, answers)}
+								onRewind={canRewind ? (it) => (ui.rewind = { convId: conv.id, itemId: it.id }) : undefined}
+							/>
 						</div>
 					{/each}
 					{#if conv.turn !== "idle" && conv.turn !== "waitingPermission"}
 						<TurnIndicator {conv} />
+					{:else if background.length}
+						<button
+							class="text-muted-foreground hover:text-foreground flex items-center gap-1.5 self-start text-[13px]"
+							onclick={() => {
+								prefs.progressPanel = true;
+								prefs.save();
+							}}
+						>
+							<Spark color={conv.provider === "codex" ? "var(--codex)" : "var(--claude)"} class="text-[14px]" />
+							{backgroundLabel} working in the background
+						</button>
 					{/if}
 				</div>
 			</div>
@@ -127,6 +211,10 @@
 					onStop={() => convActions.interrupt(conv)}
 					onAttach={() => convActions.pickFiles()}
 					onPasteImage={(blob, name) => convActions.saveImage(blob, name)}
+					agents={conv.session.agents ?? []}
+					onSuggestFiles={conv.provider === "claude" ? suggestFiles : undefined}
+					onCycleMode={modes.length ? cycleMode : undefined}
+					{modeHint}
 				/>
 			</div>
 			<StatusLine

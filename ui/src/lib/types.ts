@@ -35,6 +35,76 @@ export interface PermissionOption {
 	kind: "allow" | "deny" | string;
 }
 
+export interface QuestionOption {
+	label: string;
+	description?: string;
+	preview?: string;
+}
+
+export interface Question {
+	question: string;
+	header: string;
+	options: QuestionOption[];
+	multiSelect: boolean;
+}
+
+export interface TaskUsage {
+	tokens: number;
+	toolUses: number;
+	durationMs: number;
+}
+
+export interface WorkflowPhase {
+	index: number;
+	title: string;
+}
+
+export interface WorkflowAgent {
+	index: number;
+	label: string;
+	state: "start" | "progress" | "done" | "error" | string;
+	phaseIndex?: number;
+	agentType?: string;
+	model?: string;
+	tokens?: number;
+	toolCalls?: number;
+	durationMs?: number;
+	startedAt?: number;
+	error?: string;
+	lastToolName?: string;
+	lastToolSummary?: string;
+	resultPreview?: string;
+	promptPreview?: string;
+}
+
+/** A subagent, background shell, monitor or Workflow run. */
+export interface TaskInfo {
+	id: string;
+	toolUseId?: string;
+	kind: "agent" | "shell" | "workflow" | "monitor" | "other" | string;
+	description: string;
+	subagentType?: string;
+	status: "running" | "completed" | "failed" | "stopped" | "killed" | "paused" | "pending" | string;
+	background: boolean;
+	startedAt: number;
+	endedAt?: number;
+	usage?: TaskUsage;
+	activity?: string;
+	lastTool?: string;
+	report?: string;
+	outputFile?: string;
+	workflowName?: string;
+	phases?: WorkflowPhase[];
+	agents?: WorkflowAgent[];
+	parentTaskId?: string;
+}
+
+export interface AgentInfo {
+	name: string;
+	description: string;
+	model?: string;
+}
+
 export type Item =
 	| { kind: "user"; id: string; blocks: Block[]; attachments: Attachment[]; ts?: string }
 	| { kind: "assistant"; id: string; blocks: Block[]; parent?: string; streaming: boolean }
@@ -73,6 +143,18 @@ export type Item =
 			options: PermissionOption[];
 			status: Status;
 			reason?: string;
+			/** Rendered body, e.g. the plan of ExitPlanMode. */
+			blocks?: Block[];
+			toolUseId?: string;
+	  }
+	| {
+			kind: "question";
+			id: string;
+			requestId: string;
+			questions: Question[];
+			status: Status;
+			answers?: Record<string, string>;
+			toolUseId?: string;
 	  }
 	| { kind: "system"; id: string; level: "info" | "warn" | "error" | "compact" | string; text: string };
 
@@ -120,6 +202,10 @@ export interface SessionInfo {
 	accountEmail?: string;
 	slashCommands?: string[];
 	models?: ModelChoice[];
+	agents?: AgentInfo[];
+	outputStyle?: string;
+	outputStyles?: string[];
+	mcpServers?: { name: string; status: string }[];
 }
 
 export type ConvEvent =
@@ -129,6 +215,8 @@ export type ConvEvent =
 	| { type: "turn"; state: TurnState; detail?: string }
 	| { type: "turnDone"; durationMs?: number; error?: string }
 	| { type: "session"; info: SessionInfo }
+	| { type: "task"; task: TaskInfo }
+	| { type: "tokens"; tokens: number }
 	| { type: "limits"; limits: Limits }
 	| { type: "reset"; items: Item[] }
 	| { type: "notice"; level: string; text: string }

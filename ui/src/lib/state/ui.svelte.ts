@@ -8,6 +8,12 @@ class UiState {
 	newConversationCwd = $state<string | null>(null);
 	searchOpen = $state(false);
 	sessionsLoading = $state(false);
+	/** Output viewer of a background shell or monitor. */
+	taskOutput = $state<{ convId: string; taskId: string } | null>(null);
+	/** Session panel (context, MCP, skills, agents, hooks, memory, style). */
+	sessionPanel = $state<{ convId: string; tab?: string } | null>(null);
+	/** Rewind dialog for a user message. */
+	rewind = $state<{ convId: string; itemId: string } | null>(null);
 
 	/** Tool and account to preselect (from the Accounts page). */
 	newConversationPreset = $state<{ provider: "claude" | "codex"; account: string } | null>(null);

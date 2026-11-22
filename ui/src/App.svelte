@@ -7,6 +7,9 @@
 	import PaneView from "$lib/components/PaneView.svelte";
 	import NewConversationDialog from "$lib/components/NewConversationDialog.svelte";
 	import SearchPalette from "$lib/components/SearchPalette.svelte";
+	import TaskOutputDialog from "$lib/components/conv/TaskOutputDialog.svelte";
+	import RewindDialog from "$lib/components/conv/RewindDialog.svelte";
+	import SessionPanel from "$lib/components/conv/SessionPanel.svelte";
 	import { convActions, startIdleReaper } from "$lib/state/sessions";
 	import { dispose as disposeTerminal, retheme } from "$lib/state/terminals";
 	import { layout } from "$lib/state/layout.svelte";
@@ -81,6 +84,9 @@
 <Toaster position="bottom-right" richColors closeButton />
 <NewConversationDialog />
 <SearchPalette />
+<TaskOutputDialog />
+<RewindDialog />
+<SessionPanel />
 
 <Tooltip.Provider delayDuration={400}>
 	<div class="h-full w-full">

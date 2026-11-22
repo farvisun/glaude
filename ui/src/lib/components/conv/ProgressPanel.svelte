@@ -6,6 +6,13 @@
 	import Bot from "@lucide/svelte/icons/bot";
 	import Spark from "./Spark.svelte";
 	import Check from "@lucide/svelte/icons/check";
+	import Terminal from "@lucide/svelte/icons/terminal";
+	import Workflow from "@lucide/svelte/icons/workflow";
+	import Eye from "@lucide/svelte/icons/eye";
+	import TaskStatus from "./TaskStatus.svelte";
+	import { convActions } from "$lib/state/sessions";
+	import { ui } from "$lib/state/ui.svelte";
+	import type { TaskInfo } from "$lib/types";
 
 	let { conv }: { conv: Conversation } = $props();
 
@@ -56,15 +63,37 @@
 	});
 
 	type ToolItem = Extract<Item, { kind: "tool" }>;
-	const agents = $derived.by(() => {
-		const tasks = conv.items.filter((i): i is ToolItem => i.kind === "tool" && (i.name === "Task" || i.name === "Agent"));
-		return tasks.map((t) => ({
-			id: t.id,
-			title: t.title,
-			status: t.status,
-			steps: conv.items.filter((i) => (i.kind === "tool" || i.kind === "assistant") && i.parent === t.id).length,
-		}));
+	// Live tasks first (running, then newest), then agent calls from history.
+	const tasks = $derived.by(() => {
+		const live = Object.values(conv.tasks).sort((a, b) => {
+			const ra = a.status === "running" || a.status === "pending" ? 0 : 1;
+			const rb = b.status === "running" || b.status === "pending" ? 0 : 1;
+			return ra - rb || b.startedAt - a.startedAt;
+		});
+		const known = new Set(live.map((t) => t.toolUseId));
+		const past = conv.items
+			.filter((i): i is ToolItem => i.kind === "tool" && (i.name === "Task" || i.name === "Agent") && !known.has(i.id))
+			.map(
+				(t): TaskInfo => ({
+					id: t.id,
+					toolUseId: t.id,
+					kind: "agent",
+					description: t.title,
+					status: t.status === "running" ? "running" : t.status === "error" ? "failed" : "completed",
+					background: false,
+					startedAt: 0,
+				}),
+			);
+		return [...live, ...past.reverse()].slice(0, 30);
 	});
+
+	const iconOf = (t: TaskInfo) => (t.kind === "shell" || t.kind === "monitor" ? Terminal : t.kind === "workflow" ? Workflow : Bot);
+	const isLive = (t: TaskInfo) => !!conv.tasks[t.id];
+	const running = (t: TaskInfo) => t.status === "running" || t.status === "pending";
+	function reveal(t: TaskInfo) {
+		const el = t.toolUseId ? document.getElementById(`tool-${t.toolUseId}`) : null;
+		el?.scrollIntoView({ behavior: "smooth", block: "center" });
+	}
 
 	const sparkColor = $derived(conv.provider === "codex" ? "var(--codex)" : "var(--claude)");
 	const elapsed = $derived(conv.turnStartedAt ? Math.max(0, now - conv.turnStartedAt) : null);
@@ -102,21 +131,45 @@
 		{/if}
 	</section>
 
-	{#if agents.length}
-		<section>
-			<h3 class="text-muted-foreground pb-1.5 text-xs font-medium">Subagents</h3>
-			<ul class="flex flex-col gap-1.5">
-				{#each agents as a (a.id)}
-					<li class="flex items-center gap-2">
-						<Bot class="text-muted-foreground size-3.5 shrink-0" />
-						<span class="min-w-0 truncate" dir="auto">{a.title}</span>
-						<span class="text-muted-foreground ms-auto shrink-0 text-xs">{a.steps}</span>
-						{#if a.status === "running"}<Spark color={sparkColor} class="text-[12px]" />{:else}<Check
-								class="text-ok size-3"
-							/>{/if}
+	<section>
+		<h3 class="text-muted-foreground flex items-center pb-1.5 text-xs font-medium">
+			Tasks
+			{#if conv.runningTasks.length}<span class="ms-auto">{conv.runningTasks.length} running</span>{/if}
+		</h3>
+		{#if tasks.length}
+			<ul class="flex flex-col gap-1">
+				{#each tasks as t (t.id)}
+					{@const Icon = iconOf(t)}
+					<li class="group/task hover:bg-accent/40 flex flex-col rounded-md px-1.5 py-1">
+						<button class="flex min-w-0 items-center gap-2 text-start" onclick={() => reveal(t)}>
+							<Icon class="text-muted-foreground size-3.5 shrink-0" />
+							<span class="min-w-0 truncate" dir="auto">{t.description || t.subagentType || t.kind}</span>
+							<span class="ms-auto shrink-0"><TaskStatus status={t.status} color={sparkColor} size={12} /></span>
+						</button>
+						<div class="text-muted-foreground flex items-center gap-2 ps-5.5 text-[11px]">
+							<span class="min-w-0 truncate" dir="auto">
+								{#if running(t)}{t.activity ?? (t.lastTool ? `Using ${t.lastTool}` : t.subagentType ?? t.kind)}{:else}{t.subagentType ??
+										t.workflowName ??
+										t.kind}{t.endedAt && t.startedAt ? ` · ${fmtDuration(t.endedAt - t.startedAt)}` : ""}{/if}
+							</span>
+							{#if isLive(t)}
+								<span class="ms-auto flex shrink-0 gap-2 opacity-0 transition-opacity group-hover/task:opacity-100 focus-within:opacity-100">
+									{#if t.kind === "shell" || t.kind === "monitor"}
+										<button class="hover:text-foreground" aria-label="Show output" onclick={() => (ui.taskOutput = { convId: conv.id, taskId: t.id })}
+											><Eye class="size-3" /></button
+										>
+									{/if}
+									{#if running(t)}
+										<button class="hover:text-foreground" onclick={() => convActions.stopTask(conv, t.id)}>Stop</button>
+									{/if}
+								</span>
+							{/if}
+						</div>
 					</li>
 				{/each}
 			</ul>
-		</section>
-	{/if}
+		{:else}
+			<p class="text-muted-foreground text-xs">Subagents, background shells and workflows show up here.</p>
+		{/if}
+	</section>
 </aside>

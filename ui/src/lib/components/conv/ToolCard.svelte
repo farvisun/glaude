@@ -1,5 +1,6 @@
 <script lang="ts">
-	import type { Item } from "$lib/types";
+	import type { Item, TaskInfo } from "$lib/types";
+	import TaskStatus from "./TaskStatus.svelte";
 	import DiffView from "./DiffView.svelte";
 	import ChevronRight from "@lucide/svelte/icons/chevron-right";
 	import FileText from "@lucide/svelte/icons/file-text";
@@ -17,7 +18,19 @@
 	import Ban from "@lucide/svelte/icons/ban";
 
 	type ToolLike = Extract<Item, { kind: "tool" | "command" | "fileChange" }>;
-	let { item }: { item: ToolLike } = $props();
+	let {
+		item,
+		task,
+		onOutput,
+		onStop,
+	}: {
+		item: ToolLike;
+		/** A background shell/monitor this call started. */
+		task?: TaskInfo;
+		onOutput?: (taskId: string) => void;
+		onStop?: (taskId: string) => void;
+	} = $props();
+	const taskRunning = $derived(task?.status === "running" || task?.status === "pending");
 
 	let open = $state(false);
 
@@ -55,9 +68,10 @@
 	const exitCode = $derived(item.kind === "command" ? item.exitCode : undefined);
 </script>
 
-<div class="group/tool text-[13px]">
+<div class="group/tool text-[13px]" id="tool-{item.id}">
+	<div class="flex min-w-0 items-center">
 	<button
-		class="hover:bg-accent/50 flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1 text-start disabled:cursor-default"
+		class="hover:bg-accent/50 flex w-full min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1 text-start disabled:cursor-default"
 		onclick={() => (open = !open)}
 		disabled={!hasBody}
 	>
@@ -65,7 +79,10 @@
 		<span class="shrink-0 font-medium">{view.name}</span>
 		<span class="text-muted-foreground min-w-0 truncate font-mono text-[12px]" dir="ltr">{view.title}</span>
 		<span class="ms-auto flex shrink-0 items-center gap-1.5">
-			{#if item.status === "running" || item.status === "pending"}
+			{#if task}
+				<span class="bg-muted text-muted-foreground rounded px-1.5 py-px text-[11px]">background</span>
+				<TaskStatus status={task.status} color="var(--muted-foreground)" size={13} />
+			{:else if item.status === "running" || item.status === "pending"}
 				<span class="tool-running" aria-label="Running">⏺&#xFE0E;</span>
 			{:else if item.status === "done"}
 				{#if exitCode !== undefined && exitCode !== 0}
@@ -83,6 +100,13 @@
 			{/if}
 		</span>
 	</button>
+	{#if task && (onOutput || onStop)}
+		<span class="text-muted-foreground flex shrink-0 items-center gap-2 ps-1 text-xs">
+			{#if onOutput}<button class="hover:text-foreground" onclick={() => onOutput?.(task.id)}>Output</button>{/if}
+			{#if taskRunning && onStop}<button class="hover:text-foreground" onclick={() => onStop?.(task.id)}>Stop</button>{/if}
+		</span>
+	{/if}
+	</div>
 	{#if open}
 		<div class="flex flex-col gap-2 ps-7 pe-1 pt-1 pb-2">
 			{#if view.diffs.length}
