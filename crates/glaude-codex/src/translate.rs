@@ -763,6 +763,7 @@ impl Translator {
                     options: options("Allow for this session"),
                     status: Status::Pending,
                     reason: s(p, "reason").map(str::to_string),
+                    blocks: Vec::new(),
                 }
             }
             "item/fileChange/requestApproval" => {
@@ -783,6 +784,7 @@ impl Translator {
                     options: options("Allow edits for this session"),
                     status: Status::Pending,
                     reason: s(p, "reason").map(str::to_string),
+                    blocks: Vec::new(),
                 }
             }
             _ => return None,
@@ -839,6 +841,7 @@ fn with_status(item: Item, st: Status) -> Item {
             diffs,
             options,
             reason,
+            blocks,
             ..
         } => Item::Permission {
             id,
@@ -850,6 +853,7 @@ fn with_status(item: Item, st: Status) -> Item {
             options,
             status: st,
             reason,
+            blocks,
         },
         other => other,
     }

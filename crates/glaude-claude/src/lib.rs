@@ -1,6 +1,7 @@
 //! Claude Code driver: stream-json protocol, control requests, transcripts.
 
 pub mod driver;
+pub mod tasks;
 pub mod tools;
 pub mod transcript;
 pub mod translate;

@@ -5,7 +5,7 @@
 //! from disk go through the same path, so history and live sessions render
 //! identically.
 
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 
 use glaude_core::model::{
     Block, ConvEvent, FileDiff, Item, LimitWindow, Limits, ModelChoice, PermissionOption,
@@ -14,6 +14,7 @@ use glaude_core::model::{
 use glaude_core::render::{self, StreamRenderer};
 use serde_json::{json, Value};
 
+use crate::tasks;
 use crate::tools;
 
 /// Tool output kept for display; the full output stays in the transcript.
@@ -55,6 +56,8 @@ struct ToolState {
 
 struct PermState {
     tool_use_id: String,
+    /// Tool name (AskUserQuestion, ExitPlanMode, Bash, ...).
+    name: String,
     tool: String,
     title: String,
     input: Value,
@@ -62,7 +65,24 @@ struct PermState {
     options: Vec<PermissionOption>,
     suggestions: Value,
     reason: Option<String>,
+    blocks: Vec<glaude_core::model::Block>,
+    answers: BTreeMap<String, String>,
 }
+
+/// One hook run, kept for the Hooks panel.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HookRun {
+    pub name: String,
+    pub event: String,
+    pub outcome: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exit_code: Option<i64>,
+    pub output: String,
+    pub at: u64,
+}
+
+const HOOK_RUNS: usize = 200;
 
 pub struct Translator {
     cwd: String,
@@ -83,6 +103,13 @@ pub struct Translator {
     turn: TurnState,
     req_seq: u64,
     model_window: Option<u64>,
+    tasks: tasks::Tasks,
+    /// Characters streamed this turn (text + tool input) and thinking.
+    turn_chars: u64,
+    thinking_chars: u64,
+    thinking_est: u64,
+    last_tokens: u64,
+    hook_runs: VecDeque<HookRun>,
 }
 
 fn s<'a>(v: &'a Value, k: &str) -> Option<&'a str> {
@@ -136,6 +163,12 @@ impl Translator {
             turn: TurnState::Idle,
             req_seq: 0,
             model_window: None,
+            tasks: tasks::Tasks::default(),
+            turn_chars: 0,
+            thinking_chars: 0,
+            thinking_est: 0,
+            last_tokens: 0,
+            hook_runs: VecDeque::new(),
         }
     }
 
@@ -166,6 +199,12 @@ impl Translator {
             return;
         }
         if self.turn != state || detail.is_some() {
+            if self.turn == TurnState::Idle && state != TurnState::Idle {
+                self.turn_chars = 0;
+                self.thinking_chars = 0;
+                self.thinking_est = 0;
+                self.last_tokens = 0;
+            }
             self.turn = state;
             out.events.push(ConvEvent::Turn { state, detail });
         }
@@ -227,6 +266,22 @@ impl Translator {
                     r["updatedPermissions"] = Value::Array(arr.clone());
                 }
             }
+            // Approving a plan leaves plan mode for the chosen mode.
+            if p.name == "ExitPlanMode" {
+                let mode = if option == "allow-accept-edits" {
+                    "acceptEdits"
+                } else {
+                    "default"
+                };
+                r["updatedPermissions"] =
+                    json!([{"type": "setMode", "mode": mode, "destination": "session"}]);
+                out.events.push(ConvEvent::Session {
+                    info: SessionInfo {
+                        permission_mode: Some(mode.into()),
+                        ..Default::default()
+                    },
+                });
+            }
             r
         } else {
             json!({
@@ -268,7 +323,54 @@ impl Translator {
         (Some(line), out)
     }
 
+    /// Answer an AskUserQuestion prompt: question text -> chosen label(s).
+    pub fn answer_question(
+        &mut self,
+        request_id: &str,
+        answers: BTreeMap<String, String>,
+    ) -> (Option<Value>, Output) {
+        let mut out = Output::default();
+        let Some(mut p) = self.perms.remove(request_id) else {
+            return (None, out);
+        };
+        let mut input = p.input.clone();
+        if let Value::Object(m) = &mut input {
+            m.insert("answers".into(), json!(answers));
+        }
+        let line = json!({
+            "type": "control_response",
+            "response": {"subtype": "success", "request_id": request_id, "response": {
+                "behavior": "allow", "updatedInput": input, "toolUseID": p.tool_use_id,
+            }},
+        });
+        p.answers = answers;
+        out.events.push(ConvEvent::Item {
+            item: self.perm_item(request_id, &p, Status::Done),
+        });
+        let state = if self.perms.is_empty() {
+            TurnState::Tool
+        } else {
+            TurnState::WaitingPermission
+        };
+        self.set_turn(&mut out, state, None);
+        (Some(line), out)
+    }
+
+    /// Recent hook runs, newest last.
+    pub fn hook_runs(&self) -> Vec<HookRun> {
+        self.hook_runs.iter().cloned().collect()
+    }
+
     fn perm_item(&self, request_id: &str, p: &PermState, status: Status) -> Item {
+        if p.name == "AskUserQuestion" {
+            return Item::Question {
+                id: format!("perm:{request_id}"),
+                request_id: request_id.to_string(),
+                questions: tools::questions(&p.input),
+                status,
+                answers: p.answers.clone(),
+            };
+        }
         Item::Permission {
             id: format!("perm:{request_id}"),
             request_id: request_id.to_string(),
@@ -279,6 +381,7 @@ impl Translator {
             options: p.options.clone(),
             status,
             reason: p.reason.clone(),
+            blocks: p.blocks.clone(),
         }
     }
 
@@ -476,6 +579,13 @@ impl Translator {
                         if text.is_empty() {
                             return;
                         }
+                        if b.parent.is_none() {
+                            if matches!(b.kind, StreamKind::Thinking) {
+                                self.thinking_chars += text.len() as u64;
+                            } else {
+                                self.turn_chars += text.len() as u64;
+                            }
+                        }
                         let (from, blocks) = b.renderer.push(text);
                         out.events.push(ConvEvent::Blocks {
                             id: b.item_id.clone(),
@@ -484,10 +594,15 @@ impl Translator {
                         });
                     }
                     (StreamKind::Tool { json, .. }, "input_json_delta") => {
-                        json.push_str(s(d, "partial_json").unwrap_or(""));
+                        let part = s(d, "partial_json").unwrap_or("");
+                        json.push_str(part);
+                        if b.parent.is_none() {
+                            self.turn_chars += part.len() as u64;
+                        }
                     }
                     _ => {}
                 }
+                self.emit_tokens(out);
             }
             "content_block_stop" => {
                 let Some(msg) = self.current_msg.get(&parent).cloned() else {
@@ -531,6 +646,18 @@ impl Translator {
                 }
             }
             _ => {}
+        }
+    }
+
+    /// Tokens produced this turn, estimated like Claude Code's spinner.
+    fn emit_tokens(&mut self, out: &mut Output) {
+        if self.history || self.turn == TurnState::Idle {
+            return;
+        }
+        let tokens = self.turn_chars / 4 + self.thinking_est.max(self.thinking_chars / 4);
+        if tokens >= self.last_tokens + 10 {
+            self.last_tokens = tokens;
+            out.events.push(ConvEvent::Tokens { tokens });
         }
     }
 
@@ -699,6 +826,34 @@ impl Translator {
                         .join("\n\n"),
                     _ => String::new(),
                 };
+                if let Some((tool_use_id, status, summary, result)) =
+                    tasks::parse_notification(&text)
+                {
+                    if let Some(t) = self.tools.get_mut(&tool_use_id) {
+                        if let Some(r) = result.clone() {
+                            t.output = Some(truncate(r));
+                        }
+                        t.status = if status == "completed" {
+                            Status::Done
+                        } else {
+                            Status::Error
+                        };
+                    }
+                    if let Some(item) = self.tool_item(&tool_use_id) {
+                        out.events.push(ConvEvent::Item { item });
+                    }
+                    if !summary.is_empty() {
+                        let id = self.next_id("sys");
+                        out.events.push(ConvEvent::Item {
+                            item: Item::System {
+                                id,
+                                level: "task".into(),
+                                text: summary,
+                            },
+                        });
+                    }
+                    return;
+                }
                 if let Some(inner) = local_command(&text) {
                     if !inner.trim().is_empty() {
                         let id = self.next_id("sys");
@@ -756,6 +911,16 @@ impl Translator {
                         cwd: s(v, "cwd").map(str::to_string),
                         version: s(v, "claude_code_version").map(str::to_string),
                         slash_commands: slash,
+                        mcp_servers: v.get("mcp_servers").and_then(Value::as_array).map(|a| {
+                            a.iter()
+                                .filter_map(|m| {
+                                    Some(glaude_core::model::McpBrief {
+                                        name: s(m, "name")?.to_string(),
+                                        status: s(m, "status").unwrap_or("").to_string(),
+                                    })
+                                })
+                                .collect()
+                        }),
                         ..Default::default()
                     },
                 });
@@ -766,11 +931,71 @@ impl Translator {
                     });
                 }
             }
-            "status" => match s(v, "status") {
-                Some("compacting") => self.set_turn(out, TurnState::Compacting, None),
-                Some("requesting") => self.set_turn(out, TurnState::Requesting, None),
-                _ => {}
-            },
+            "status" => {
+                if let Some(mode) = s(v, "permissionMode") {
+                    out.events.push(ConvEvent::Session {
+                        info: SessionInfo {
+                            permission_mode: Some(mode.to_string()),
+                            ..Default::default()
+                        },
+                    });
+                }
+                match s(v, "status") {
+                    Some("compacting") => self.set_turn(out, TurnState::Compacting, None),
+                    Some("requesting") => self.set_turn(out, TurnState::Requesting, None),
+                    _ => {}
+                }
+            }
+            "task_started"
+            | "task_progress"
+            | "task_updated"
+            | "task_notification"
+            | "background_tasks_changed" => {
+                for change in self.tasks.apply(v) {
+                    if let (Some(line), false) = (&change.ended, self.history) {
+                        // Steps of a finished subagent that never reported back.
+                        if let Some(parent) = change.task.tool_use_id.as_deref() {
+                            self.settle_children(parent, out);
+                        }
+                        let id = self.next_id("sys");
+                        out.events.push(ConvEvent::Item {
+                            item: Item::System {
+                                id,
+                                level: "task".into(),
+                                text: line.clone(),
+                            },
+                        });
+                    }
+                    out.events.push(ConvEvent::Task { task: change.task });
+                }
+            }
+            "thinking_tokens" => {
+                self.thinking_est = self.thinking_est.max(u(v, "estimated_tokens"));
+                self.emit_tokens(out);
+            }
+            "hook_response" => {
+                if !self.history {
+                    let text = s(v, "output")
+                        .filter(|t| !t.is_empty())
+                        .or(s(v, "stderr"))
+                        .unwrap_or("");
+                    let mut output: String = text.chars().take(4000).collect();
+                    if text.len() > output.len() {
+                        output.push('…');
+                    }
+                    self.hook_runs.push_back(HookRun {
+                        name: s(v, "hook_name").unwrap_or("").to_string(),
+                        event: s(v, "hook_event").unwrap_or("").to_string(),
+                        outcome: s(v, "outcome").unwrap_or("").to_string(),
+                        exit_code: v.get("exit_code").and_then(Value::as_i64),
+                        output,
+                        at: tasks::now_ms(),
+                    });
+                    while self.hook_runs.len() > HOOK_RUNS {
+                        self.hook_runs.pop_front();
+                    }
+                }
+            }
             "compact_boundary" => {
                 let id = self.next_id("sys");
                 out.events.push(ConvEvent::Item {
@@ -823,6 +1048,27 @@ impl Translator {
         }
     }
 
+    /// Mark a finished subagent's leftover running steps as done.
+    fn settle_children(&mut self, parent: &str, out: &mut Output) {
+        let open: Vec<String> = self
+            .tools
+            .iter()
+            .filter(|(_, t)| {
+                t.parent.as_deref() == Some(parent)
+                    && matches!(t.status, Status::Running | Status::Pending)
+            })
+            .map(|(id, _)| id.clone())
+            .collect();
+        for id in open {
+            if let Some(t) = self.tools.get_mut(&id) {
+                t.status = Status::Done;
+            }
+            if let Some(item) = self.tool_item(&id) {
+                out.events.push(ConvEvent::Item { item });
+            }
+        }
+    }
+
     fn on_result(&mut self, v: &Value, out: &mut Output) {
         if let Some(mu) = v.get("modelUsage").and_then(Value::as_object) {
             if let Some(w) = mu
@@ -840,10 +1086,14 @@ impl Translator {
             },
         });
         // Anything still running when the turn ends did not finish.
+        // Anything of the main thread still running when the turn ends did
+        // not finish. Subagent steps go on: background agents outlive turns.
         let open: Vec<String> = self
             .tools
             .iter()
-            .filter(|(_, t)| matches!(t.status, Status::Running | Status::Pending))
+            .filter(|(_, t)| {
+                t.parent.is_none() && matches!(t.status, Status::Running | Status::Pending)
+            })
             .map(|(id, _)| id.clone())
             .collect();
         for id in open {
@@ -854,7 +1104,16 @@ impl Translator {
                 out.events.push(ConvEvent::Item { item });
             }
         }
-        let perms: Vec<String> = self.perms.keys().cloned().collect();
+        let perms: Vec<String> = self
+            .perms
+            .iter()
+            .filter(|(_, p)| {
+                self.tools
+                    .get(&p.tool_use_id)
+                    .is_none_or(|t| t.parent.is_none())
+            })
+            .map(|(rid, _)| rid.clone())
+            .collect();
         for rid in perms {
             if let Some(p) = self.perms.remove(&rid) {
                 out.events.push(ConvEvent::Item {
@@ -935,28 +1194,35 @@ impl Translator {
                     .get("permission_suggestions")
                     .cloned()
                     .unwrap_or(Value::Null);
-                let mut options = vec![PermissionOption {
-                    id: "allow".into(),
-                    label: "Allow".into(),
-                    kind: "allow".into(),
-                }];
-                if let Some(label) = always_label(&suggestions) {
-                    options.push(PermissionOption {
-                        id: "allow-always".into(),
-                        label,
-                        kind: "allow".into(),
-                    });
-                }
-                options.push(PermissionOption {
-                    id: "deny".into(),
-                    label: "Deny".into(),
-                    kind: "deny".into(),
-                });
+                let opt = |id: &str, label: &str, kind: &str| PermissionOption {
+                    id: id.into(),
+                    label: label.into(),
+                    kind: kind.into(),
+                };
+                let mut blocks = Vec::new();
+                let options = if name == "ExitPlanMode" {
+                    blocks = render::render(s(&input, "plan").unwrap_or(""));
+                    vec![
+                        opt("allow-accept-edits", "Yes, and auto-accept edits", "allow"),
+                        opt("allow-default", "Yes, and ask before each edit", "allow"),
+                        opt("deny", "No, keep planning", "deny"),
+                    ]
+                } else if name == "AskUserQuestion" {
+                    vec![opt("deny", "Skip", "deny")]
+                } else {
+                    let mut o = vec![opt("allow", "Allow", "allow")];
+                    if let Some(label) = always_label(&suggestions) {
+                        o.push(opt("allow-always", &label, "allow"));
+                    }
+                    o.push(opt("deny", "Deny", "deny"));
+                    o
+                };
                 let reason = s(req, "decision_reason")
                     .or(s(req, "blocked_path"))
                     .map(str::to_string);
                 let p = PermState {
                     tool_use_id,
+                    name,
                     tool,
                     title,
                     input,
@@ -964,6 +1230,8 @@ impl Translator {
                     options,
                     suggestions,
                     reason,
+                    blocks,
+                    answers: BTreeMap::new(),
                 };
                 out.events.push(ConvEvent::Item {
                     item: self.perm_item(&rid, &p, Status::Pending),
@@ -1043,9 +1311,37 @@ impl Translator {
                         .collect()
                 })
                 .unwrap_or_default();
+            let agents = r
+                .get("agents")
+                .and_then(Value::as_array)
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|x| {
+                            Some(glaude_core::model::AgentInfo {
+                                name: s(x, "name")?.to_string(),
+                                description: s(x, "description").unwrap_or("").to_string(),
+                                model: s(x, "model").map(str::to_string),
+                            })
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            let output_styles = r
+                .get("available_output_styles")
+                .and_then(Value::as_array)
+                .map(|a| {
+                    a.iter()
+                        .filter_map(Value::as_str)
+                        .map(str::to_string)
+                        .collect()
+                })
+                .unwrap_or_default();
             out.events.push(ConvEvent::Session {
                 info: SessionInfo {
                     models,
+                    agents,
+                    output_style: s(r, "output_style").map(str::to_string),
+                    output_styles,
                     slash_commands: commands,
                     account_email: r
                         .get("account")
@@ -1146,6 +1442,7 @@ fn local_command(text: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use glaude_core::model::TaskInfo;
 
     fn replay(fixture: &str) -> (Translator, Vec<ConvEvent>, Vec<Value>) {
         let path = format!(
@@ -1331,5 +1628,163 @@ mod tests {
         assert!(
             matches!(&o.events[0], ConvEvent::Item { item: Item::System { text, .. } } if text == "Total cost: $0.10")
         );
+    }
+
+    #[test]
+    fn ask_user_question_becomes_a_form() {
+        let (_, events, _) = replay("ask-question.ndjson");
+        let q = final_items(&events)
+            .into_iter()
+            .find_map(|i| match i {
+                Item::Question { questions, .. } => Some(questions),
+                _ => None,
+            })
+            .expect("question item");
+        assert_eq!(q[0].question, "Which colour do you prefer?");
+        assert_eq!(q[0].options.len(), 2);
+        assert!(!q[0].multi_select);
+        // Answering builds updatedInput.answers.
+        let mut t2 = Translator::new("/tmp/fixproj");
+        let req = json!({"type": "control_request", "request_id": "r1", "request": {
+            "subtype": "can_use_tool", "tool_name": "AskUserQuestion",
+            "input": {"questions": [{"question": "Q?", "header": "H", "options": [{"label": "A"}, {"label": "B"}], "multiSelect": true}]},
+            "tool_use_id": "tu1"}});
+        let o = t2.feed(&req);
+        assert!(matches!(
+            &o.events[0],
+            ConvEvent::Item {
+                item: Item::Question {
+                    status: Status::Pending,
+                    ..
+                }
+            }
+        ));
+        let mut answers = BTreeMap::new();
+        answers.insert("Q?".to_string(), "A, B".to_string());
+        let (line, out) = t2.answer_question("r1", answers);
+        let line = line.unwrap();
+        assert_eq!(line["response"]["response"]["behavior"], "allow");
+        assert_eq!(
+            line["response"]["response"]["updatedInput"]["answers"]["Q?"],
+            "A, B"
+        );
+        assert!(
+            matches!(&out.events[0], ConvEvent::Item { item: Item::Question { status: Status::Done, answers, .. } } if answers["Q?"] == "A, B")
+        );
+    }
+
+    #[test]
+    fn plan_approval_sets_the_mode() {
+        let mut t = Translator::new("/tmp/fixproj");
+        let req = json!({"type": "control_request", "request_id": "p1", "request": {
+            "subtype": "can_use_tool", "tool_name": "ExitPlanMode",
+            "input": {"plan": "# Plan\n\n1. Do it", "planFilePath": "/tmp/p.md"}, "tool_use_id": "tu2"}});
+        let o = t.feed(&req);
+        let ConvEvent::Item {
+            item: Item::Permission {
+                options, blocks, ..
+            },
+        } = &o.events[0]
+        else {
+            panic!()
+        };
+        assert_eq!(
+            options.iter().map(|o| o.id.as_str()).collect::<Vec<_>>(),
+            ["allow-accept-edits", "allow-default", "deny"]
+        );
+        assert!(blocks.iter().any(|b| b.html.contains("<h1")));
+        let (line, out) = t.answer_permission("p1", "allow-accept-edits", None);
+        let r = &line.unwrap()["response"]["response"];
+        assert_eq!(r["updatedPermissions"][0]["mode"], "acceptEdits");
+        assert!(out.events.iter().any(|e| matches!(e, ConvEvent::Session { info } if info.permission_mode.as_deref() == Some("acceptEdits"))));
+        // Feedback keeps planning.
+        t.feed(&req);
+        let (line, _) = t.answer_permission("p1", "deny", Some("Add tests first".into()));
+        assert_eq!(
+            line.unwrap()["response"]["response"]["message"],
+            "Add tests first"
+        );
+    }
+
+    #[test]
+    fn background_tasks_survive_the_turn() {
+        let (_, events, _) = replay("agents-background.ndjson");
+        let tasks: Vec<&TaskInfo> = events
+            .iter()
+            .filter_map(|e| match e {
+                ConvEvent::Task { task } => Some(task),
+                _ => None,
+            })
+            .collect();
+        assert!(tasks
+            .iter()
+            .any(|t| t.kind == "agent" && t.status == "completed"));
+        assert!(tasks
+            .iter()
+            .any(|t| t.kind == "shell" && t.status == "completed"));
+        let items = final_items(&events);
+        // Subagent steps are linked to the Agent call and were not cut off.
+        let agent_call = items
+            .iter()
+            .find_map(|i| match i {
+                Item::Tool { id, name, .. } if name == "Agent" => Some(id.clone()),
+                _ => None,
+            })
+            .unwrap();
+        let children: Vec<&Item> = items
+            .iter()
+            .filter(|i| matches!(i, Item::Tool { parent: Some(p), .. } if *p == agent_call))
+            .collect();
+        assert!(!children.is_empty());
+        assert!(children.iter().all(|i| !matches!(
+            i,
+            Item::Tool {
+                status: Status::Interrupted,
+                ..
+            }
+        )));
+        let lines: Vec<&str> = items
+            .iter()
+            .filter_map(|i| match i {
+                Item::System { level, text, .. } if level == "task" => Some(text.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(lines.len(), 2, "{lines:?}");
+    }
+
+    #[test]
+    fn workflow_run_reports_agents() {
+        let (_, events, _) = replay("workflow.ndjson");
+        let last = events
+            .iter()
+            .rev()
+            .find_map(|e| match e {
+                ConvEvent::Task { task } => Some(task),
+                _ => None,
+            })
+            .unwrap();
+        assert_eq!(last.kind, "workflow");
+        assert_eq!(last.status, "completed");
+        assert_eq!(last.agents.len(), 2);
+        // Two turns: the CLI starts the second itself when the run ends.
+        let done = events
+            .iter()
+            .filter(|e| matches!(e, ConvEvent::TurnDone { .. }))
+            .count();
+        assert_eq!(done, 2);
+    }
+
+    #[test]
+    fn transcript_task_notification_fills_the_agent_report() {
+        let mut t = Translator::for_history("/tmp/fixproj");
+        t.feed(&json!({"type": "assistant", "message": {"id": "m1", "role": "assistant", "content": [
+            {"type": "tool_use", "id": "toolu_9", "name": "Agent", "input": {"description": "List files", "subagent_type": "Explore", "prompt": "x"}}]}}));
+        let o = t.feed(&json!({"type": "user", "uuid": "u9", "message": {"role": "user", "content":
+            "<task-notification>\n<task-id>a1</task-id>\n<tool-use-id>toolu_9</tool-use-id>\n<status>completed</status>\n<summary>Agent \"List files\" finished</summary>\n<result>a.rs, b.rs</result>\n</task-notification>"}}));
+        assert!(o.events.iter().any(|e| matches!(e, ConvEvent::Item { item: Item::Tool { output: Some(out), .. } } if out == "a.rs, b.rs")));
+        assert!(o.events.iter().any(
+            |e| matches!(e, ConvEvent::Item { item: Item::System { level, .. } } if level == "task")
+        ));
     }
 }

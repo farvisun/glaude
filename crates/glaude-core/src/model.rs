@@ -2,6 +2,8 @@
 //! drivers translate their wire protocols into these types; the UI only
 //! knows about these.
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -77,6 +79,137 @@ pub struct PermissionOption {
     pub label: String,
     /// allow | deny
     pub kind: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QuestionOption {
+    pub label: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    /// Optional preview (code, mockup) shown when the option is focused.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub preview: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Question {
+    pub question: String,
+    #[serde(default)]
+    pub header: String,
+    pub options: Vec<QuestionOption>,
+    #[serde(default)]
+    pub multi_select: bool,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskUsage {
+    pub tokens: u64,
+    pub tool_uses: u64,
+    pub duration_ms: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkflowPhase {
+    pub index: u32,
+    pub title: String,
+}
+
+/// One agent of a Workflow run.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkflowAgent {
+    pub index: u32,
+    pub label: String,
+    /// start | progress | done | error
+    pub state: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub phase_index: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tokens: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_calls: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub duration_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub started_at: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_tool_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_tool_summary: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub result_preview: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub prompt_preview: Option<String>,
+}
+
+/// Work Claude runs outside the main turn: subagents, background shells,
+/// monitors and Workflow runs.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskInfo {
+    pub id: String,
+    /// The tool call that started it (Agent/Task, Bash, Workflow, Monitor).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_use_id: Option<String>,
+    /// agent | shell | workflow | monitor | other
+    pub kind: String,
+    pub description: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subagent_type: Option<String>,
+    /// running | completed | failed | stopped | killed | paused | pending
+    pub status: String,
+    pub background: bool,
+    /// Unix ms.
+    pub started_at: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ended_at: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub usage: Option<TaskUsage>,
+    /// Latest progress line, e.g. "Running List files".
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub activity: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_tool: Option<String>,
+    /// Final report or completion summary.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub report: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub output_file: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub workflow_name: Option<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub phases: Vec<WorkflowPhase>,
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub agents: Vec<WorkflowAgent>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_task_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentInfo {
+    pub name: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct McpBrief {
+    pub name: String,
+    pub status: String,
 }
 
 /// One entry in a conversation.
@@ -159,6 +292,21 @@ pub enum Item {
         status: Status,
         #[serde(skip_serializing_if = "Option::is_none")]
         reason: Option<String>,
+        /// Rendered body, e.g. the plan of an ExitPlanMode request.
+        #[serde(skip_serializing_if = "Vec::is_empty", default)]
+        blocks: Vec<Block>,
+    },
+    /// Claude asks the user (AskUserQuestion); answered from the UI.
+    #[serde(rename_all = "camelCase")]
+    Question {
+        id: String,
+        /// Provider request id to answer.
+        request_id: String,
+        questions: Vec<Question>,
+        status: Status,
+        /// Question text -> chosen label(s), once answered.
+        #[serde(skip_serializing_if = "BTreeMap::is_empty", default)]
+        answers: BTreeMap<String, String>,
     },
     #[serde(rename_all = "camelCase")]
     System {
@@ -180,6 +328,7 @@ impl Item {
             | Item::FileChange { id, .. }
             | Item::Plan { id, .. }
             | Item::Permission { id, .. }
+            | Item::Question { id, .. }
             | Item::System { id, .. } => id,
         }
     }
@@ -255,6 +404,15 @@ pub struct SessionInfo {
     pub slash_commands: Vec<String>,
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub models: Vec<ModelChoice>,
+    /// Subagents this session can use (built-in, user, project, plugins).
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub agents: Vec<AgentInfo>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub output_style: Option<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub output_styles: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mcp_servers: Option<Vec<McpBrief>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -298,6 +456,12 @@ pub enum ConvEvent {
     },
     #[serde(rename_all = "camelCase")]
     Session { info: SessionInfo },
+    /// A subagent, background shell, monitor or workflow changed.
+    #[serde(rename_all = "camelCase")]
+    Task { task: TaskInfo },
+    /// Estimated tokens produced so far in this turn.
+    #[serde(rename_all = "camelCase")]
+    Tokens { tokens: u64 },
     #[serde(rename_all = "camelCase")]
     Limits { limits: Limits },
     /// Many items at once, e.g. history load. Replaces everything.

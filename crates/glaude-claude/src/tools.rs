@@ -186,6 +186,45 @@ pub fn result_text(content: &Value) -> String {
     }
 }
 
+/// The questions of an AskUserQuestion call.
+pub fn questions(input: &Value) -> Vec<glaude_core::model::Question> {
+    use glaude_core::model::{Question, QuestionOption};
+    let str_of = |v: &Value, k: &str| v.get(k).and_then(Value::as_str).map(str::to_string);
+    input
+        .get("questions")
+        .and_then(Value::as_array)
+        .map(|qs| {
+            qs.iter()
+                .filter_map(|q| {
+                    Some(Question {
+                        question: str_of(q, "question")?,
+                        header: str_of(q, "header").unwrap_or_default(),
+                        multi_select: q
+                            .get("multiSelect")
+                            .and_then(Value::as_bool)
+                            .unwrap_or(false),
+                        options: q
+                            .get("options")
+                            .and_then(Value::as_array)
+                            .map(|os| {
+                                os.iter()
+                                    .filter_map(|o| {
+                                        Some(QuestionOption {
+                                            label: str_of(o, "label")?,
+                                            description: str_of(o, "description"),
+                                            preview: str_of(o, "preview"),
+                                        })
+                                    })
+                                    .collect()
+                            })
+                            .unwrap_or_default(),
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

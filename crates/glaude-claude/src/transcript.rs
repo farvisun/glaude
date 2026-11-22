@@ -248,6 +248,26 @@ pub fn load_items(path: &Path, cwd: &str) -> anyhow::Result<Vec<Item>> {
     Ok(items)
 }
 
+/// The message a user message replied to (`parentUuid`), to rewind the
+/// conversation to just before it. `Some(None)`: it was the first message.
+pub fn parent_of(path: &Path, uuid: &str) -> Option<Option<String>> {
+    let text = std::fs::read_to_string(path).ok()?;
+    let needle = format!("\"uuid\":\"{uuid}\"");
+    for line in text.lines().filter(|l| l.contains(&needle)) {
+        let Ok(v) = serde_json::from_str::<serde_json::Value>(line) else {
+            continue;
+        };
+        if v.get("uuid").and_then(|u| u.as_str()) == Some(uuid) {
+            return Some(
+                v.get("parentUuid")
+                    .and_then(|p| p.as_str())
+                    .map(str::to_string),
+            );
+        }
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

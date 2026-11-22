@@ -1,5 +1,6 @@
 //! Runs one `claude -p --input-format stream-json` process per conversation.
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::Arc;
@@ -28,6 +29,10 @@ pub struct ClaudeSpec {
     pub permission_mode: Option<String>,
     pub resume: Option<String>,
     pub fork: bool,
+    /// Resume only up to this message uuid (rewind the conversation).
+    pub resume_at: Option<String>,
+    /// Run the main thread as this agent (`--agent`).
+    pub agent: Option<String>,
     /// When resuming, replay the transcript into the UI first.
     pub load_history: bool,
 }
@@ -52,6 +57,8 @@ impl ClaudeSpec {
             "--replay-user-messages",
             "--permission-prompt-tool",
             "stdio",
+            // Hook runs for the Hooks panel.
+            "--include-hook-events",
         ]
         .iter()
         .map(|s| s.to_string())
@@ -67,9 +74,15 @@ impl ClaudeSpec {
         }
         if let Some(r) = self.resume.as_deref().filter(|r| !r.is_empty()) {
             a.extend(["--resume".into(), r.into()]);
+            if let Some(at) = self.resume_at.as_deref().filter(|a| !a.is_empty()) {
+                a.extend(["--resume-session-at".into(), at.into()]);
+            }
             if self.fork {
                 a.push("--fork-session".into());
             }
+        }
+        if let Some(agent) = self.agent.as_deref().filter(|a| !a.is_empty()) {
+            a.extend(["--agent".into(), agent.into()]);
         }
         a
     }
@@ -80,12 +93,22 @@ impl ClaudeSpec {
             .config_dir
             .as_ref()
             .map(|d| d.display().to_string().trim_end_matches('/').to_string());
-        env::agent_env(&[("CLAUDE_CONFIG_DIR", dir)])
+        env::agent_env(&[
+            ("CLAUDE_CONFIG_DIR", dir),
+            // Lets the UI rewind file edits to any earlier message.
+            (
+                "CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING",
+                Some("1".into()),
+            ),
+        ])
     }
 }
 
+type Pending = Arc<Mutex<HashMap<String, oneshot::Sender<Result<Value, String>>>>>;
+
 pub struct ClaudeSession {
     stdin: mpsc::UnboundedSender<String>,
+    pending: Pending,
     translator: Arc<Mutex<Translator>>,
     sink: Sink,
     kill: Mutex<Option<oneshot::Sender<()>>>,
@@ -144,6 +167,7 @@ impl ClaudeSession {
         let mut stderr = child.stderr.take().expect("stderr");
 
         let translator = Arc::new(Mutex::new(Translator::new(&spec.cwd)));
+        let pending: Pending = Arc::default();
         let (tx, mut rx) = mpsc::unbounded_channel::<String>();
 
         // Writer: one JSON object per line, never blocks the UI thread.
@@ -185,6 +209,7 @@ impl ClaudeSession {
             let translator = translator.clone();
             let sink = sink.clone();
             let tx = tx.clone();
+            let pending = pending.clone();
             tokio::spawn(async move {
                 let mut lines = BufReader::with_capacity(256 * 1024, stdout).lines();
                 while let Ok(Some(l)) = lines.next_line().await {
@@ -195,6 +220,25 @@ impl ClaudeSession {
                         tracing::debug!(line = %l.chars().take(200).collect::<String>(), "non-JSON stdout line");
                         continue;
                     };
+                    // Replies to requests the UI is awaiting.
+                    if v.get("type").and_then(Value::as_str) == Some("control_response") {
+                        let resp = v.get("response").cloned().unwrap_or(Value::Null);
+                        let rid = resp.get("request_id").and_then(Value::as_str).unwrap_or("");
+                        if let Some(waiter) = pending.lock().remove(rid) {
+                            let r = if resp.get("subtype").and_then(Value::as_str) == Some("error")
+                            {
+                                Err(resp
+                                    .get("error")
+                                    .and_then(Value::as_str)
+                                    .unwrap_or("request failed")
+                                    .to_string())
+                            } else {
+                                Ok(resp.get("response").cloned().unwrap_or(Value::Null))
+                            };
+                            let _ = waiter.send(r);
+                            continue;
+                        }
+                    }
                     let out = translator.lock().feed(&v);
                     for r in &out.requests {
                         let _ = tx.send(line(r));
@@ -245,15 +289,16 @@ impl ClaudeSession {
 
         let session = Self {
             stdin: tx,
+            pending,
             translator,
             sink,
             kill: Mutex::new(Some(kill_tx)),
             pid,
         };
-        let init = session
-            .translator
-            .lock()
-            .control("init", json!({"subtype": "initialize"}));
+        let init = session.translator.lock().control(
+            "init",
+            json!({"subtype": "initialize", "agentProgressSummaries": true}),
+        );
         session.write(&init);
         Ok(session)
     }
@@ -288,6 +333,39 @@ impl ClaudeSession {
             self.write(&l);
         }
         (self.sink)(out.events);
+    }
+
+    /// Send a control request and wait for its reply.
+    pub async fn request(&self, request: Value) -> Result<Value> {
+        let line = self.translator.lock().control("ui", request);
+        let rid = line["request_id"].as_str().unwrap_or_default().to_string();
+        let (tx, rx) = oneshot::channel();
+        self.pending.lock().insert(rid.clone(), tx);
+        self.write(&line);
+        match tokio::time::timeout(std::time::Duration::from_secs(45), rx).await {
+            Ok(Ok(r)) => r.map_err(|e| anyhow!(e)),
+            Ok(Err(_)) => Err(anyhow!("Claude exited before answering")),
+            Err(_) => {
+                self.pending.lock().remove(&rid);
+                Err(anyhow!("Claude did not answer in time"))
+            }
+        }
+    }
+
+    pub fn answer_question(
+        &self,
+        request_id: &str,
+        answers: std::collections::BTreeMap<String, String>,
+    ) {
+        let (line, out) = self.translator.lock().answer_question(request_id, answers);
+        if let Some(l) = line {
+            self.write(&l);
+        }
+        (self.sink)(out.events);
+    }
+
+    pub fn hook_runs(&self) -> Vec<crate::translate::HookRun> {
+        self.translator.lock().hook_runs()
     }
 
     pub fn set_mode(&self, mode: &str) {
