@@ -78,6 +78,13 @@ its own direction, keeps code left-to-right, and uses the Estedad font.
   terminals get `HTTPS_PROXY`, `HTTP_PROXY`, `ALL_PROXY` and `NO_PROXY`.
   *Check* reaches Anthropic and OpenAI through a proxy and shows the exit
   address and latency. Claude Code does not support SOCKS proxies.
+- **Projects**: create projects in the sidebar (name, one or more folders,
+  a colour or icon, and defaults for new conversations: tool, account,
+  model, effort, permissions and proxy). Their conversations are listed
+  together; folders outside every project sit under *Other folders*, with
+  *Make it a project* on each. Drag projects to reorder them, or sort them by
+  recent activity or name; conversations sort by recent activity, start
+  time or name. The agents board, saved prompts and usage tables sort too.
 - **Sidebar, tabs and splits**: up to eight panes; drag a tab to an edge, or
   right-click a tab or pane to split it. Editor-style tabs show whether an
   agent is working, needs you, or finished while you were elsewhere; they
@@ -108,7 +115,7 @@ its own direction, keeps code left-to-right, and uses the Estedad font.
   conversation for turns run in Glaude, plus every account's 5-hour and
   weekly limits. The progress panel shows a timeline of the latest turn.
 - **Settings** (Cmd+,): appearance (theme, palette, interface size, density,
-  message width, code font), defaults for new conversations (tool, account,
+  animations, message width, code font), defaults for new conversations (tool, account,
   model, effort, permissions, send key), background and alerts (keep agents
   working after quitting, idle stop time, which notifications, sound),
   terminal (font, size, cursor, shell), network (proxies), saved prompts
