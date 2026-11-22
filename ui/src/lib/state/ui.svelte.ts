@@ -14,6 +14,18 @@ class UiState {
 	sessionPanel = $state<{ convId: string; tab?: string } | null>(null);
 	/** Rewind dialog for a user message. */
 	rewind = $state<{ convId: string; itemId: string } | null>(null);
+	/** Scroll a conversation to an item once it is shown (e.g. a pending approval). */
+	reveal = $state<{ convId: string; itemId: string } | null>(null);
+	/** Find bar of the conversation in focus. */
+	findOpen = $state<string | null>(null);
+	/** Bumped by ⌘F so an open find bar selects its text again. */
+	findSeq = $state(0);
+	/** Command palette. */
+	paletteOpen = $state(false);
+	/** Saved prompt being created ("new") or edited. */
+	promptEdit = $state<import("./prompts.svelte").SavedPrompt | "new" | null>(null);
+	/** Saved prompt whose parts are being filled in, for a conversation. */
+	promptFill = $state<{ prompt: import("./prompts.svelte").SavedPrompt; convId: string } | null>(null);
 	/** Settings section to show next (from the menu). */
 	settingsSection = $state<string | null>(null);
 	/** Set by the app shell: show or hide the sidebar. */

@@ -30,6 +30,8 @@
 		modeHint,
 		onSteer,
 		getHistory,
+		savedPrompts = [],
+		onPrompt,
 	}: {
 		running: boolean;
 		disabled?: boolean;
@@ -51,6 +53,9 @@
 		onSteer?: (text: string, attachments: Attachment[]) => void;
 		/** Earlier prompts, oldest first, for ArrowUp (read when needed). */
 		getHistory?: () => string[];
+		/** Saved prompts offered in the / menu. */
+		savedPrompts?: { id: string; slug: string; name: string }[];
+		onPrompt?: (id: string) => void;
 	} = $props();
 
 	// ArrowUp/ArrowDown walk earlier prompts; the draft is kept aside.
@@ -125,9 +130,24 @@
 		const m = /^\/([\w:-]*)$/.exec(text);
 		return m ? m[1].toLowerCase() : null;
 	});
-	const slashMatches = $derived(
-		slashQuery === null ? [] : slashCommands.filter((c) => c.toLowerCase().startsWith(slashQuery)).slice(0, 8),
-	);
+	type SlashEntry = { key: string; prompt?: { id: string; name: string } };
+	const slashMatches = $derived.by((): SlashEntry[] => {
+		if (slashQuery === null) return [];
+		const saved = savedPrompts
+			.filter((p) => p.slug.startsWith(slashQuery) || p.name.toLowerCase().includes(slashQuery))
+			.map((p) => ({ key: p.slug, prompt: { id: p.id, name: p.name } }));
+		const cmds = slashCommands.filter((c) => c.toLowerCase().startsWith(slashQuery)).map((c) => ({ key: c }));
+		return [...saved, ...cmds].slice(0, 10);
+	});
+	function pickSlash(e: SlashEntry) {
+		menuIndex = 0;
+		if (e.prompt && onPrompt) {
+			text = "";
+			onPrompt(e.prompt.id);
+			return;
+		}
+		text = "/" + e.key + " ";
+	}
 
 	// @ mentions: agents and files, for the word being typed at the caret.
 	let caret = $state(0);
@@ -247,10 +267,10 @@
 				menuIndex = (menuIndex + d + slashMatches.length) % slashMatches.length;
 				return;
 			}
-			if (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey && slashMatches[menuIndex] !== slashQuery)) {
+			const hit = slashMatches[menuIndex];
+			if (hit && (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey && (hit.prompt || hit.key !== slashQuery)))) {
 				e.preventDefault();
-				text = "/" + slashMatches[menuIndex] + " ";
-				menuIndex = 0;
+				pickSlash(hit);
 				return;
 			}
 		}
@@ -325,14 +345,17 @@
 >
 	{#if slashMatches.length}
 		<div class="bg-popover border-border absolute inset-x-2 bottom-full mb-1.5 overflow-hidden rounded-lg border py-1 shadow-md">
-			{#each slashMatches as c, i (c)}
+			{#each slashMatches as c, i (c.prompt ? `p:${c.prompt.id}` : c.key)}
 				<button
-					class="flex w-full px-3 py-1 text-start font-mono text-[13px] {i === menuIndex ? 'bg-accent' : ''}"
+					class="flex w-full items-center gap-3 px-3 py-1 text-start text-[13px] {i === menuIndex ? 'bg-accent' : ''}"
 					onmousedown={(e) => {
 						e.preventDefault();
-						text = "/" + c + " ";
+						pickSlash(c);
 						el?.focus();
-					}}>/{c}</button
+					}}
+					><span class="font-mono">/{c.key}</span>{#if c.prompt}<span class="text-muted-foreground ms-auto truncate text-[12px]" dir="auto"
+							>Saved prompt · {c.prompt.name}</span
+						>{/if}</button
 				>
 			{/each}
 		</div>

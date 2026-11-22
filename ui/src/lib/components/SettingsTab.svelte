@@ -28,13 +28,19 @@
 	import ChevronDown from "@lucide/svelte/icons/chevron-down";
 	import Minus from "@lucide/svelte/icons/minus";
 	import Plus from "@lucide/svelte/icons/plus";
+	import Bookmark from "@lucide/svelte/icons/bookmark";
+	import Pencil from "@lucide/svelte/icons/pencil";
+	import Trash from "@lucide/svelte/icons/trash-2";
+	import { prompts, slugOf } from "$lib/state/prompts.svelte";
+	import { basename } from "$lib/format";
 
 	const sections = [
 		{ id: "appearance", title: "Appearance", icon: Palette_, keys: ["uiScale", "density", "codeFont", "codeFontCustom", "messageWidth"] },
 		{ id: "new", title: "New conversations", icon: MessageSquarePlus, keys: ["sendKey"] },
-		{ id: "conversations", title: "Conversations", icon: MessagesSquare, keys: ["statuslineScript", "progressPanel", "editor"] },
-		{ id: "background", title: "Background & alerts", icon: BellRing, keys: ["keepAgents", "idleMinutes", "notifyDone", "notifyWaiting", "notifyErrors", "notifyClosed", "notifySound"] },
+		{ id: "conversations", title: "Conversations", icon: MessagesSquare, keys: ["statuslineScript", "progressPanel", "compactTools", "editor"] },
+		{ id: "background", title: "Background & alerts", icon: BellRing, keys: ["keepAgents", "idleMinutes", "notifyDone", "notifyWaiting", "notifyErrors", "notifyClosed", "notifySound", "alertWaitMinutes", "alertLongMinutes"] },
 		{ id: "terminal", title: "Terminal", icon: SquareTerminal, keys: ["termFont", "termFontCustom", "termFontSize", "termCursor", "termCursorBlink", "termShell"] },
+		{ id: "prompts", title: "Saved prompts", icon: Bookmark, keys: [] },
 		{ id: "keys", title: "Keyboard shortcuts", icon: Keyboard, keys: [] },
 	] as const;
 	type SectionId = (typeof sections)[number]["id"];
@@ -126,6 +132,12 @@
 		["Next permission mode", "⇧Tab"],
 		["Zoom in / out / reset", `${mod}+ / ${mod}− / ${mod}0`],
 		["Settings", `${mod},`],
+		["Command palette", isMac ? "⇧⌘P" : "Ctrl+Shift+P"],
+		["Find in conversation", `${mod}F`],
+		["Agents board", isMac ? "⌥⌘A" : "Ctrl+Alt+A"],
+		["Next agent waiting for you", isMac ? "⇧⌘A" : "Ctrl+Shift+A"],
+		["Ask the other tool to review", isMac ? "⇧⌘R" : "Ctrl+Shift+R"],
+		["Saved prompt", "/name"],
 	];
 
 	const resetSection = (keys: readonly string[]) => prefs.reset(keys as (keyof Prefs)[]);
@@ -309,8 +321,15 @@
 					>
 						<Switch checked={prefs.statuslineScript} onCheckedChange={(v) => prefs.set("statuslineScript", v)} aria-label="Use my Claude statusline script" />
 					</SettingRow>
-					<SettingRow label="Progress panel" description="Turn state, plan and current tool beside each conversation.">
+					<SettingRow label="Progress panel" description="Turn state, plan, timeline and current tool beside each conversation.">
 						<Switch checked={prefs.progressPanel} onCheckedChange={(v) => prefs.set("progressPanel", v)} aria-label="Progress panel" />
+					</SettingRow>
+					<SettingRow
+						label="Fold tool calls"
+						description="Consecutive tool calls show as one line, like “Read 6 files · Ran 3 commands”. Click it to see each call."
+						keywords="compact tools collapse group"
+					>
+						<Switch checked={prefs.compactTools} onCheckedChange={(v) => prefs.set("compactTools", v)} aria-label="Fold tool calls" />
 					</SettingRow>
 					<SettingRow label="Open file links with" description="Paths in replies (like src/main.rs:12) open here, at the line." keywords="editor vscode cursor zed">
 						<Choice label="Editor" value={prefs.editor} options={editors.map((e) => ({ value: e, label: editorNames[e] }))} onChange={(v) => prefs.set("editor", v)} />
@@ -356,6 +375,36 @@
 					</SettingRow>
 					<SettingRow label="Play a sound" keywords="notification audio">
 						<Switch checked={prefs.notifySound} onCheckedChange={(v) => prefs.set("notifySound", v)} aria-label="Play a sound" />
+					</SettingRow>
+					<SettingRow
+						label="Remind me when an agent waits"
+						description="Another notification when an approval or question has waited this long."
+						keywords="alert stuck waiting reminder"
+					>
+						<Choice
+							label="Remind me when an agent waits"
+							value={prefs.alertWaitMinutes}
+							options={[
+								{ value: 2, label: "After 2 minutes" },
+								{ value: 5, label: "After 5 minutes" },
+								{ value: 15, label: "After 15 minutes" },
+								{ value: 0, label: "Never" },
+							]}
+							onChange={(v) => prefs.set("alertWaitMinutes", v)}
+						/>
+					</SettingRow>
+					<SettingRow label="Tell me about long commands" description="A notification when one command or tool runs this long." keywords="alert slow long running">
+						<Choice
+							label="Tell me about long commands"
+							value={prefs.alertLongMinutes}
+							options={[
+								{ value: 5, label: "After 5 minutes" },
+								{ value: 10, label: "After 10 minutes" },
+								{ value: 30, label: "After 30 minutes" },
+								{ value: 0, label: "Never" },
+							]}
+							onChange={(v) => prefs.set("alertLongMinutes", v)}
+						/>
 					</SettingRow>
 				</section>
 			{/if}
@@ -406,6 +455,41 @@
 				</section>
 			{/if}
 
+			{#if visible("prompts")}
+				<section class="settings-section">
+					<div class="flex items-center gap-2 pt-1 pb-1">
+						<h2 class="text-[15px] font-semibold">Saved prompts</h2>
+						<Button variant="outline" size="sm" class="ms-auto h-7" onclick={() => (ui.promptEdit = "new")}><Plus /> New prompt</Button>
+					</div>
+					<SettingRow
+						label="Use them anywhere"
+						description={"Type / and the prompt's name in a message, or pick one in the command palette (⇧⌘P). Parts like {{file}} are asked for first."}
+						keywords="prompt snippet template saved"
+						stacked
+					>
+						{#if prompts.list.length}
+							<ul class="border-border divide-border divide-y rounded-md border">
+								{#each prompts.list as p (p.id)}
+									<li class="flex items-center gap-3 px-3 py-2">
+										<div class="min-w-0 flex-1">
+											<div class="flex items-baseline gap-2">
+												<span class="truncate text-[13px] font-medium" dir="auto">{p.name}</span>
+												<span class="text-muted-foreground font-mono text-[11px]">/{slugOf(p.name)}</span>
+											</div>
+											<p class="text-muted-foreground truncate text-[12px]" dir="auto">{p.body}</p>
+										</div>
+										<span class="text-muted-foreground shrink-0 text-[11px]">{p.cwd ? basename(p.cwd) : "Every project"}</span>
+										<Button variant="ghost" size="icon-sm" aria-label="Edit {p.name}" onclick={() => (ui.promptEdit = p)}><Pencil /></Button>
+										<Button variant="ghost" size="icon-sm" aria-label="Delete {p.name}" onclick={() => prompts.remove(p.id)}><Trash /></Button>
+									</li>
+								{/each}
+							</ul>
+						{:else}
+							<p class="text-muted-foreground border-border rounded-md border border-dashed px-3 py-6 text-center text-[13px]">No saved prompts yet.</p>
+						{/if}
+					</SettingRow>
+				</section>
+			{/if}
 			{#if visible("keys")}
 				<section class="settings-section">
 					{@render header("Keyboard shortcuts", [])}

@@ -27,6 +27,8 @@ const defaults = {
 	/** Show the output of the user's Claude statusLine.command instead of the built-in line. */
 	statuslineScript: false,
 	editor: "default" as Editor,
+	/** Fold consecutive tool calls into one line. */
+	compactTools: true,
 	// Appearance
 	uiScale: 1,
 	density: "comfortable" as Density,
@@ -44,6 +46,10 @@ const defaults = {
 	notifySound: false,
 	/** Notifications from the agent host while no window is open. */
 	notifyClosed: true,
+	/** Remind when an agent has waited for you this long (minutes, 0 = never). */
+	alertWaitMinutes: 5,
+	/** Tell when one command or tool runs this long (minutes, 0 = never). */
+	alertLongMinutes: 10,
 	// Terminal
 	termFont: "system" as FontChoice,
 	termFontCustom: "",
@@ -60,6 +66,7 @@ class PrefStore {
 	progressPanel = $state(defaults.progressPanel);
 	statuslineScript = $state(defaults.statuslineScript);
 	editor = $state(defaults.editor);
+	compactTools = $state(defaults.compactTools);
 	uiScale = $state(defaults.uiScale);
 	density = $state(defaults.density);
 	codeFont = $state(defaults.codeFont);
@@ -73,6 +80,8 @@ class PrefStore {
 	notifyErrors = $state(defaults.notifyErrors);
 	notifySound = $state(defaults.notifySound);
 	notifyClosed = $state(defaults.notifyClosed);
+	alertWaitMinutes = $state(defaults.alertWaitMinutes);
+	alertLongMinutes = $state(defaults.alertLongMinutes);
 	termFont = $state(defaults.termFont);
 	termFontCustom = $state(defaults.termFontCustom);
 	termFontSize = $state(defaults.termFontSize);
