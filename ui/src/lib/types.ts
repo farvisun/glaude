@@ -225,12 +225,19 @@ export interface SessionInfo {
 	mcpServers?: { name: string; status: string }[];
 }
 
+/** Token use of one turn (input includes cache writes; cached = cache reads). */
+export interface TurnTokens {
+	input: number;
+	cached: number;
+	output: number;
+}
+
 export type ConvEvent =
 	| { type: "item"; item: Item }
 	| { type: "blocks"; id: string; from: number; blocks: Block[] }
 	| { type: "output"; id: string; chunk: string }
 	| { type: "turn"; state: TurnState; detail?: string }
-	| { type: "turnDone"; durationMs?: number; error?: string }
+	| { type: "turnDone"; durationMs?: number; error?: string; tokens?: TurnTokens }
 	| { type: "session"; info: SessionInfo }
 	| { type: "task"; task: TaskInfo }
 	| { type: "queue"; items: QueuedMessage[] }

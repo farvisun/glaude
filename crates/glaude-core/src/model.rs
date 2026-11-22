@@ -429,6 +429,16 @@ pub struct ModelChoice {
     pub efforts: Vec<String>,
 }
 
+/// Token use of one turn. `input` is new input (including cache writes),
+/// `cached` is input read from the prompt cache.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TurnTokens {
+    pub input: u64,
+    pub cached: u64,
+    pub output: u64,
+}
+
 /// Events pushed to the UI for one conversation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
@@ -458,6 +468,9 @@ pub enum ConvEvent {
         duration_ms: Option<u64>,
         #[serde(skip_serializing_if = "Option::is_none")]
         error: Option<String>,
+        /// Tokens this turn used, when the tool reports them.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tokens: Option<TurnTokens>,
     },
     #[serde(rename_all = "camelCase")]
     Session { info: SessionInfo },

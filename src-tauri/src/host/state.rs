@@ -262,6 +262,7 @@ mod tests {
         s.apply(&ConvEvent::TurnDone {
             duration_ms: None,
             error: None,
+            tokens: None,
         });
         assert!(!s.busy());
     }

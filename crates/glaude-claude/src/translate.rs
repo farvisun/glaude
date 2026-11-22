@@ -9,7 +9,7 @@ use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 
 use glaude_core::model::{
     Block, ConvEvent, FileDiff, Item, LimitWindow, Limits, ModelChoice, PermissionOption,
-    SessionInfo, Status, TurnState,
+    SessionInfo, Status, TurnState, TurnTokens,
 };
 use glaude_core::render::{self, StreamRenderer};
 use serde_json::{json, Value};
@@ -1154,9 +1154,15 @@ impl Translator {
         };
         self.turn = TurnState::Idle;
         if !self.history {
+            let tokens = v.get("usage").map(|us| TurnTokens {
+                input: u(us, "input_tokens") + u(us, "cache_creation_input_tokens"),
+                cached: u(us, "cache_read_input_tokens"),
+                output: u(us, "output_tokens"),
+            });
             out.events.push(ConvEvent::TurnDone {
                 duration_ms: v.get("duration_ms").and_then(Value::as_u64),
                 error,
+                tokens,
             });
             let usage = self.control("usage", json!({"subtype": "get_usage"}));
             let ctx = self.control("ctx", json!({"subtype": "get_context_usage"}));
@@ -1543,6 +1549,19 @@ mod tests {
         assert!(events
             .iter()
             .any(|e| matches!(e, ConvEvent::TurnDone { error: None, .. })));
+        // The turn's own tokens: new input with cache writes, cache reads, output.
+        let tokens = events.iter().find_map(|e| match e {
+            ConvEvent::TurnDone { tokens, .. } => *tokens,
+            _ => None,
+        });
+        assert_eq!(
+            tokens,
+            Some(TurnTokens {
+                input: 34677,
+                cached: 52932,
+                output: 219
+            })
+        );
         assert_eq!(
             requests.len(),
             2,

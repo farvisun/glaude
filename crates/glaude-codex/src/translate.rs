@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet};
 use glaude_core::diff;
 use glaude_core::model::{
     Attachment, ConvEvent, FileDiff, Item, LimitWindow, Limits, PermissionOption, PlanStep,
-    SessionInfo, Status, TurnState,
+    SessionInfo, Status, TurnState, TurnTokens,
 };
 use glaude_core::render::{self, StreamRenderer};
 use serde_json::{json, Value};
@@ -198,6 +198,9 @@ pub struct Translator {
     client_ids: HashSet<String>,
     seq: u64,
     turn: TurnState,
+    /// Thread token totals: now, and when the current turn started.
+    tokens_total: TurnTokens,
+    tokens_at_start: TurnTokens,
 }
 
 impl Translator {
@@ -213,6 +216,8 @@ impl Translator {
             client_ids: HashSet::new(),
             seq: 0,
             turn: TurnState::Idle,
+            tokens_total: TurnTokens::default(),
+            tokens_at_start: TurnTokens::default(),
         }
     }
 
@@ -542,6 +547,7 @@ impl Translator {
         match method {
             "turn/started" => {
                 self.turn_id = p.get("turn").and_then(|t| s(t, "id")).map(str::to_string);
+                self.tokens_at_start = self.tokens_total;
                 self.set_turn(&mut out, TurnState::Thinking, None);
             }
             "item/started" => out = self.item(p.get("item").unwrap_or(&Value::Null), false),
@@ -593,6 +599,14 @@ impl Translator {
             }
             "thread/tokenUsage/updated" => {
                 if let Some(tu) = p.get("tokenUsage") {
+                    if let Some(t) = tu.get("total") {
+                        let cached = u(t, "cachedInputTokens").unwrap_or(0);
+                        self.tokens_total = TurnTokens {
+                            input: u(t, "inputTokens").unwrap_or(0).saturating_sub(cached),
+                            cached,
+                            output: u(t, "outputTokens").unwrap_or(0),
+                        };
+                    }
                     let last = tu.get("last").and_then(|l| u(l, "totalTokens"));
                     out.push(ConvEvent::Session {
                         info: SessionInfo {
@@ -720,9 +734,16 @@ impl Translator {
                 self.turn = TurnState::Idle;
                 self.turn_id = None;
                 if !self.history {
+                    let (now, start) = (self.tokens_total, self.tokens_at_start);
+                    let tokens = (now != start).then(|| TurnTokens {
+                        input: now.input.saturating_sub(start.input),
+                        cached: now.cached.saturating_sub(start.cached),
+                        output: now.output.saturating_sub(start.output),
+                    });
                     out.push(ConvEvent::TurnDone {
                         duration_ms: u(&turn, "durationMs"),
                         error,
+                        tokens,
                     });
                 }
             }
@@ -948,6 +969,19 @@ mod tests {
         assert!(events
             .iter()
             .any(|e| matches!(e, ConvEvent::TurnDone { error: None, .. })));
+        // Thread totals grow over the turn; the turn's share is the growth.
+        let tokens = events.iter().find_map(|e| match e {
+            ConvEvent::TurnDone { tokens, .. } => *tokens,
+            _ => None,
+        });
+        assert_eq!(
+            tokens,
+            Some(TurnTokens {
+                input: 38519 - 19072,
+                cached: 19072,
+                output: 72
+            })
+        );
     }
 
     #[test]

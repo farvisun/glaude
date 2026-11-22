@@ -629,6 +629,7 @@ impl CodexThread {
             self.emit(vec![ConvEvent::TurnDone {
                 duration_ms: None,
                 error: Some(e.to_string()),
+                tokens: None,
             }]);
             return Err(e);
         }
