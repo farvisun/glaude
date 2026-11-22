@@ -1,0 +1,16 @@
+[package]
+name = "glaude-search"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+glaude-core.workspace = true
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+parking_lot.workspace = true
+rusqlite = { version = "0.37", features = ["bundled"] }
+walkdir = "2"
+memchr = "2"

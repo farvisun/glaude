@@ -1444,6 +1444,7 @@ dependencies = [
  "glaude-claude",
  "glaude-codex",
  "glaude-core",
+ "glaude-search",
  "parking_lot",
  "portable-pty",
  "serde",
@@ -1517,6 +1518,7 @@ dependencies = [
  "ammonia",
  "anyhow",
  "dirs 6.0.0",
+ "memchr",
  "once_cell",
  "parking_lot",
  "pulldown-cmark",
@@ -1525,6 +1527,21 @@ dependencies = [
  "similar",
  "syntect",
  "tracing",
+]
+
+[[package]]
+name = "glaude-search"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "glaude-core",
+ "memchr",
+ "parking_lot",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "walkdir",
 ]
 
 [[package]]
