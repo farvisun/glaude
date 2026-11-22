@@ -2,12 +2,14 @@
 // leaf has its own tab strip. Persisted to localStorage so the window comes
 // back the way it was left.
 
-export type TabKind = "welcome" | "conversation" | "terminal" | "accounts" | "settings" | "search";
+export type TabKind = "welcome" | "conversation" | "terminal" | "accounts" | "settings" | "search" | "file" | "changes";
 
 /** What a terminal tab runs: a login shell, or a CLI's own TUI. */
 export interface TermSpec {
 	cwd?: string;
 	run?: { provider: "claude" | "codex"; account: string; resume?: string; login?: boolean };
+	/** Typed into the shell once it starts (project actions, worktree setup). */
+	command?: string;
 }
 
 export interface Tab {
@@ -17,6 +19,8 @@ export interface Tab {
 	/** conversation id or terminal id, depending on kind */
 	ref?: string;
 	term?: TermSpec;
+	/** File viewer: line to show. */
+	line?: number;
 }
 
 export interface Leaf {
@@ -134,6 +138,7 @@ class Layout {
 			(t) => t.kind === spec.kind && (t.ref ?? null) === (spec.ref ?? null) && spec.kind !== "terminal",
 		);
 		if (existing) {
+			if (spec.line !== undefined) existing.line = spec.line;
 			this.activate(existing.id);
 			return existing.id;
 		}

@@ -2,6 +2,15 @@
 	import { prefs, type Palette } from "$lib/state/prefs.svelte";
 	import { setMode, userPrefersMode } from "mode-watcher";
 	import { Switch } from "$lib/components/ui/switch";
+	import * as Select from "$lib/components/ui/select";
+	import { call } from "$lib/ipc";
+	import { editorNames } from "$lib/state/paths";
+	import type { Editor } from "$lib/state/prefs.svelte";
+
+	let editors = $state<Editor[]>(["default"]);
+	call<Editor[]>("editors_available")
+		.then((list) => (editors = ["default", ...list]))
+		.catch(() => {});
 
 	const palettes: { id: Palette; name: string; note: string; swatch: string[] }[] = [
 		{ id: "lajevard", name: "Lajevard", note: "Lapis ink with a turquoise accent", swatch: ["#101a2e", "#5cc8bd", "#f2b544", "#e4eaf4"] },
@@ -61,6 +70,27 @@
 					}}
 				/>
 			</label>
+			<div class="flex items-start justify-between gap-4 text-[13px]">
+				<span>
+					<span class="font-medium">Open file links with</span>
+					<span class="text-muted-foreground block">Paths in replies (like <code>src/main.rs:12</code>) open here, at the line.</span>
+				</span>
+				<Select.Root
+					type="single"
+					value={prefs.editor}
+					onValueChange={(v) => {
+						prefs.editor = v as Editor;
+						prefs.save();
+					}}
+				>
+					<Select.Trigger class="w-44" aria-label="Editor">{editorNames[prefs.editor]}</Select.Trigger>
+					<Select.Content>
+						{#each editors as e (e)}
+							<Select.Item value={e} label={editorNames[e]}>{editorNames[e]}</Select.Item>
+						{/each}
+					</Select.Content>
+				</Select.Root>
+			</div>
 			<label class="flex items-start justify-between gap-4 text-[13px]">
 				<span>
 					<span class="font-medium">Progress panel</span>

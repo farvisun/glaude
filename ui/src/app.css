@@ -394,24 +394,32 @@
 }
 
 /* syntect class-based highlighting (base16-ish, follows palette). */
-.prose-g .hl-comment {
+:is(.prose-g, .code-view) .hl-comment {
 	color: var(--muted-foreground);
 	font-style: italic;
 }
-.prose-g .hl-keyword,
-.prose-g .hl-storage {
+:is(.prose-g, .code-view) :is(.hl-keyword, .hl-storage) {
 	color: var(--codex);
 }
-.prose-g .hl-string {
+:is(.prose-g, .code-view) .hl-string {
 	color: var(--ok);
 }
-.prose-g .hl-constant,
-.prose-g .hl-number {
+:is(.prose-g, .code-view) :is(.hl-constant, .hl-number) {
 	color: var(--attention);
 }
-.prose-g .hl-entity,
-.prose-g .hl-function {
+:is(.prose-g, .code-view) :is(.hl-entity, .hl-function) {
 	color: var(--claude);
+}
+
+/* Paths in replies that exist on disk (see state/paths.ts). */
+.path-link {
+	cursor: pointer;
+	text-decoration: underline dotted color-mix(in oklab, currentColor 45%, transparent);
+	text-underline-offset: 3px;
+}
+.path-link:hover {
+	text-decoration-style: solid;
+	color: var(--primary);
 }
 
 .scrollbar-thin {

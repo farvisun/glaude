@@ -14,6 +14,8 @@ class UiState {
 	sessionPanel = $state<{ convId: string; tab?: string } | null>(null);
 	/** Rewind dialog for a user message. */
 	rewind = $state<{ convId: string; itemId: string } | null>(null);
+	/** Actions for a path clicked in a reply. */
+	pathMenu = $state<{ hit: import("./paths").PathHit; x: number; y: number } | null>(null);
 
 	/** Tool and account to preselect (from the Accounts page). */
 	newConversationPreset = $state<{ provider: "claude" | "codex"; account: string } | null>(null);
@@ -29,6 +31,12 @@ class UiState {
 	}
 
 	/** A new terminal starts in the folder of the conversation in focus. */
+	/** The Changes tab (diffs, commit, push, PR) of a project folder. */
+	openChanges(cwd: string, paneId?: string) {
+		const name = cwd.split(/[\\/]/).filter(Boolean).pop() ?? cwd;
+		layout.openTab({ kind: "changes", title: `Changes · ${name}`, ref: cwd }, paneId);
+	}
+
 	openTerminal(term: TermSpec = {}, title = "Terminal", paneId?: string) {
 		if (!term.cwd) {
 			const tab = layout.focusedLeaf.active ? layout.tabs[layout.focusedLeaf.active] : undefined;

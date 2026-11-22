@@ -10,10 +10,12 @@
 	import TaskOutputDialog from "$lib/components/conv/TaskOutputDialog.svelte";
 	import RewindDialog from "$lib/components/conv/RewindDialog.svelte";
 	import SessionPanel from "$lib/components/conv/SessionPanel.svelte";
+	import PathMenu from "$lib/components/PathMenu.svelte";
 	import { convActions, hostLost, restoreConversations, startIdleReaper } from "$lib/state/sessions";
 	import { inTauri } from "$lib/ipc";
 	import { dispose as disposeTerminal, retheme } from "$lib/state/terminals";
 	import { layout } from "$lib/state/layout.svelte";
+	import { conversations } from "$lib/state/conversations.svelte";
 	import { ui } from "$lib/state/ui.svelte";
 	import { prefs, isMac } from "$lib/state/prefs.svelte";
 	import type { Pane } from "paneforge";
@@ -28,7 +30,10 @@
 		});
 
 	layout.onClose = (tab) => {
-		if (tab.kind === "conversation" && tab.ref) convActions.close(tab.ref);
+		if (tab.kind === "conversation" && tab.ref) {
+			convActions.close(tab.ref);
+			disposeTerminal(`drawer:${tab.ref}`);
+		}
 		if (tab.kind === "terminal") disposeTerminal(tab.id);
 	};
 
@@ -76,6 +81,13 @@
 			e.preventDefault();
 			ui.searchOpen = !ui.searchOpen;
 		}
+		if (mod && e.shiftKey && e.key.toLowerCase() === "g") {
+			e.preventDefault();
+			const tab = layout.focusedLeaf.active ? layout.tabs[layout.focusedLeaf.active] : undefined;
+			const conv = tab?.kind === "conversation" && tab.ref ? conversations.get(tab.ref) : undefined;
+			if (conv) ui.openChanges(conv.cwd);
+			return;
+		}
 		if (mod && e.key.toLowerCase() === "w") {
 			e.preventDefault();
 			const active = layout.focusedLeaf.active;
@@ -93,6 +105,7 @@
 <TaskOutputDialog />
 <RewindDialog />
 <SessionPanel />
+<PathMenu />
 
 <Tooltip.Provider delayDuration={400}>
 	<div class="h-full w-full">

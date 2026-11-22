@@ -1,6 +1,8 @@
 mod accounts;
 mod commands;
 mod conv;
+mod files;
+mod git;
 pub mod host;
 mod pty;
 mod search;
@@ -92,6 +94,21 @@ pub fn run() {
             pty::pty_write,
             pty::pty_resize,
             pty::pty_close,
+            git::git_info,
+            git::git_diff,
+            git::git_log,
+            git::git_commit,
+            git::git_push,
+            git::git_pr_status,
+            git::git_pr_create,
+            git::git_message,
+            git::project_config,
+            git::worktree_add,
+            git::worktree_remove,
+            files::paths_check,
+            files::open_path,
+            files::editors_available,
+            files::read_text_file,
             conv::conv_start,
             conv::conv_attach,
             conv::host_list,

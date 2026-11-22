@@ -15,7 +15,12 @@
 	import Spark from "./Spark.svelte";
 	import QueuePanel from "./QueuePanel.svelte";
 	import LimitBanner from "./LimitBanner.svelte";
+	import TerminalDrawer from "./TerminalDrawer.svelte";
+	import { Button } from "$lib/components/ui/button";
+	import MessagesSquare from "@lucide/svelte/icons/messages-square";
 	import Quote from "@lucide/svelte/icons/quote";
+	import { hitOf, markPaths } from "$lib/state/paths";
+	import { pathActions } from "$lib/state/open";
 
 	let { convId, active }: { convId: string; active: boolean } = $props();
 
@@ -105,6 +110,14 @@
 	});
 
 	function onClick(e: MouseEvent) {
+		const pathEl = (e.target as HTMLElement).closest("[data-path]") as HTMLElement | null;
+		const hit = pathEl ? hitOf(pathEl) : null;
+		if (hit) {
+			e.preventDefault();
+			if (e.metaKey || e.ctrlKey) void pathActions.primary(hit);
+			else ui.pathMenu = { hit, x: e.clientX, y: e.clientY };
+			return;
+		}
 		const a = (e.target as HTMLElement).closest("a[href]") as HTMLAnchorElement | null;
 		if (!a) return;
 		e.preventDefault();
@@ -134,6 +147,34 @@
 	$effect(() => {
 		if (active) tick().then(() => composer?.focus());
 	});
+
+	// Paths in replies that exist become links (checked in batches).
+	$effect(() => {
+		if (!content || !conv) return;
+		const root = content;
+		const cwd = conv.cwd;
+		let t: ReturnType<typeof setTimeout> | undefined;
+		const scan = () => {
+			clearTimeout(t);
+			t = setTimeout(() => void markPaths(root, cwd), 250);
+		};
+		scan();
+		const mo = new MutationObserver(scan);
+		mo.observe(root, { childList: true, subtree: true });
+		return () => {
+			mo.disconnect();
+			clearTimeout(t);
+		};
+	});
+
+	// Ctrl+` shows or hides the terminal drawer (also from inside it).
+	function onWindowKey(e: KeyboardEvent) {
+		if (!active || !conv || !e.ctrlKey || e.metaKey || e.altKey || (e.key !== "`" && e.code !== "Backquote")) return;
+		e.preventDefault();
+		e.stopPropagation();
+		conv.drawer = !conv.drawer;
+		if (!conv.drawer) tick().then(() => composer?.focus());
+	}
 
 	// A tab restored after a restart resumes its session once it is shown.
 	$effect(() => {
@@ -207,9 +248,21 @@
 	});
 </script>
 
+<svelte:window onkeydowncapture={onWindowKey} />
+
 {#if conv}
 	<div class="@container flex h-full min-h-0">
 		<div class="flex min-w-0 flex-1 flex-col">
+			{#if conv.sideOf}
+				<div class="border-border bg-card/60 flex items-center gap-2 border-b px-4 py-1.5 text-xs">
+					<MessagesSquare class="text-muted-foreground size-3.5 shrink-0" />
+					<span class="text-muted-foreground min-w-0 flex-1 truncate"
+						>Side chat · knows <span class="text-foreground" dir="auto">{conversations.get(conv.sideOf)?.title ?? "the original conversation"}</span> up to when it
+						started</span
+					>
+					<Button variant="outline" size="sm" class="h-6 text-xs" onclick={() => convActions.addToParent(conv)}>Add to chat</Button>
+				</div>
+			{/if}
 			<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
 			<div
 				class="scrollbar-thin relative min-h-0 flex-1 overflow-y-auto"
@@ -293,10 +346,12 @@
 				<Composer
 					bind:this={composer}
 					running={conv.running}
-					slashCommands={conv.session.slashCommands ?? []}
+					slashCommands={["btw", ...(conv.session.slashCommands ?? []).filter((c) => c !== "btw")]}
 					placeholder={`Message ${providerLabel}`}
 					onSend={(text, attachments) =>
-						conv.running || conv.queue.length ? convActions.enqueue(conv, text, attachments) : convActions.send(conv, text, attachments)}
+						/^\/btw\b/.test(text) || !(conv.running || conv.queue.length)
+							? convActions.send(conv, text, attachments)
+							: convActions.enqueue(conv, text, attachments)}
 					onSteer={(text, attachments) => convActions.steer(conv, text, attachments)}
 					history={promptHistory}
 					onStop={() => convActions.interrupt(conv)}
@@ -308,6 +363,9 @@
 					{modeHint}
 				/>
 			</div>
+			{#if conv.drawer}
+				<TerminalDrawer id="drawer:{conv.id}" cwd={conv.cwd} onClose={() => (conv.drawer = false)} />
+			{/if}
 			<StatusLine
 				{conv}
 				{modes}

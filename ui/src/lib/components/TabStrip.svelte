@@ -10,6 +10,8 @@
 	import Settings from "@lucide/svelte/icons/settings";
 	import Sparkles from "@lucide/svelte/icons/sparkles";
 	import Columns2 from "@lucide/svelte/icons/columns-2";
+	import FileText from "@lucide/svelte/icons/file-text";
+	import GitCompare from "@lucide/svelte/icons/git-compare";
 	import { layout, MAX_PANES, type Leaf, type TabKind } from "$lib/state/layout.svelte";
 	import { drag } from "$lib/state/drag.svelte";
 	import { ui } from "$lib/state/ui.svelte";
@@ -29,6 +31,8 @@
 		accounts: Users,
 		settings: Settings,
 		search: Sparkles,
+		file: FileText,
+		changes: GitCompare,
 	};
 
 	let dropIndex = $state<number | null>(null);

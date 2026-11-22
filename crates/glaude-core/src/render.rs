@@ -43,7 +43,9 @@ fn sanitizer() -> &'static ammonia::Builder<'static> {
             .add_tag_attributes("ol", ["start"])
             .add_tag_attributes("td", ["align"])
             .add_tag_attributes("th", ["align"])
-            .link_rel(None);
+            .link_rel(None)
+            // Links to local files open in the app (see the UI's path links).
+            .add_url_schemes(["file"]);
         b
     })
 }
@@ -89,7 +91,9 @@ pub fn top_level_ranges(src: &str) -> Vec<Range<usize>> {
     ranges
 }
 
-fn highlight(code: &str, lang: &str) -> Option<String> {
+/// Highlight `code` as `lang` (a fence token or file extension) into
+/// classed spans; None when the language is unknown or the code too big.
+pub fn highlight(code: &str, lang: &str) -> Option<String> {
     if code.len() > HIGHLIGHT_LIMIT || lang.is_empty() {
         return None;
     }

@@ -5,6 +5,8 @@
 	import ConversationView from "./conv/ConversationView.svelte";
 	import TerminalTab from "./TerminalTab.svelte";
 	import AccountsTab from "./accounts/AccountsTab.svelte";
+	import FileTab from "./FileTab.svelte";
+	import ChangesTab from "./changes/ChangesTab.svelte";
 
 	let { tab, active }: { tab: Tab; active: boolean } = $props();
 </script>
@@ -19,4 +21,8 @@
 	<TerminalTab {tab} {active} />
 {:else if tab.kind === "accounts"}
 	<AccountsTab {active} />
+{:else if tab.kind === "file" && tab.ref}
+	<FileTab {tab} {active} />
+{:else if tab.kind === "changes" && tab.ref}
+	<ChangesTab cwd={tab.ref} {active} />
 {/if}
