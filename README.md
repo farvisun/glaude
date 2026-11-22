@@ -126,8 +126,9 @@ its own direction, keeps code left-to-right, and uses the Estedad font.
 - **Statusline**: model, effort, permission mode, folder, git branch,
   context %, cost, lines changed, 5-hour and weekly limits. Optionally runs
   your own Claude `statusLine.command` with the same input Claude Code gives it.
-- **Progress panel**: turn state, elapsed time, current tool, plan, and the
-  conversation's tasks.
+- **Progress panel** (⌥⌘P) on the right, full height beside the panes and
+  the terminal panel: turn state, elapsed time, current tool, plan, and the
+  tasks of the focused conversation.
 - **Claude agents and workflows**: each subagent is a card with its type,
   live status, usage, steps and report; Workflow runs show their phases and
   agents; background shells have an output viewer. Any task can be stopped.

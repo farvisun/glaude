@@ -100,7 +100,7 @@
 	const elapsed = $derived(conv.turnStartedAt ? Math.max(0, now - conv.turnStartedAt) : null);
 </script>
 
-<aside class="border-border bg-sidebar/40 scrollbar-thin flex h-full w-full flex-col gap-5 overflow-y-auto border-s px-3 py-3 text-[13px]">
+<div class="scrollbar-thin flex h-full w-full flex-col gap-5 overflow-y-auto px-3 py-3 text-[13px]">
 	<section>
 		<h3 class="text-muted-foreground pb-1.5 text-xs font-medium">Now</h3>
 		<div class="flex items-center gap-2">
@@ -178,4 +178,4 @@
 			<p class="text-muted-foreground text-xs">Subagents, background shells and workflows show up here.</p>
 		{/if}
 	</section>
-</aside>
+</div>

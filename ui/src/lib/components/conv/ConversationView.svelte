@@ -6,8 +6,6 @@
 	import ItemView from "./ItemView.svelte";
 	import Composer from "./Composer.svelte";
 	import StatusLine from "./StatusLine.svelte";
-	import ProgressPanel from "./ProgressPanel.svelte";
-	import { slide } from "$lib/motion";
 	import TurnIndicator from "./TurnIndicator.svelte";
 	import { tick } from "svelte";
 	import { call } from "$lib/ipc";
@@ -641,11 +639,6 @@
 				onModel={(m) => convActions.setModel(conv, m)}
 			/>
 		</div>
-		{#if prefs.progressPanel}
-			<div class="hidden w-64 shrink-0 @3xl:block" transition:slide={{ axis: "x", duration: 200 }}>
-				<ProgressPanel {conv} />
-			</div>
-		{/if}
 	</div>
 {:else}
 	<div class="text-muted-foreground grid h-full place-items-center text-[13px]">This conversation is no longer open.</div>

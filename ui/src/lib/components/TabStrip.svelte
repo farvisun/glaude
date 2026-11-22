@@ -74,8 +74,8 @@
 		if (pane.tabs.length === 1) layout.splitNew(pane.id, edge);
 		else if (tab) layout.splitWith(pane.id, edge, tab.id);
 	}
-	// The progress panel belongs to conversations; its toggle sits on the
-	// right of each strip showing one.
+	// While the progress panel is hidden, its toggle sits on the right of each
+	// strip showing a conversation (the panel's own header hides it again).
 	const showsConversation = $derived(layout.tabs[pane.active ?? ""]?.kind === "conversation");
 
 	const isFirstPane = $derived(layout.leaves()[0]?.id === pane.id);
@@ -321,7 +321,7 @@
 				{/if}
 			</DropdownMenu.Content>
 		</DropdownMenu.Root>
-		{#if showsConversation}
+		{#if showsConversation && !prefs.progressPanel}
 			<Tooltip.Root>
 				<Tooltip.Trigger>
 					{#snippet child({ props })}

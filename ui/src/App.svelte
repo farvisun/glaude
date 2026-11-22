@@ -21,11 +21,15 @@
 	import { termPanel } from "$lib/state/termpanel.svelte";
 	import { proxies } from "$lib/state/proxies.svelte";
 	import { motionOn, slide } from "$lib/motion";
+	import ProgressPanel from "$lib/components/conv/ProgressPanel.svelte";
+	import { Button } from "$lib/components/ui/button";
+	import PanelRightClose from "@lucide/svelte/icons/panel-right-close";
 	import { convActions, hostLost, restoreConversations, startIdleReaper } from "$lib/state/sessions";
 	import { startAlerts } from "$lib/state/alerts";
 	import { call, inTauri } from "$lib/ipc";
 	import { dispose as disposeTerminal, retheme, reconfigure as reconfigureTerminals } from "$lib/state/terminals";
 	import { layout } from "$lib/state/layout.svelte";
+	import { conversations } from "$lib/state/conversations.svelte";
 	import { onKey as runShortcut, startCommands, currentConv, menuOwned } from "$lib/state/commands.svelte";
 	import { ui } from "$lib/state/ui.svelte";
 	import { prefs, isMac, widths } from "$lib/state/prefs.svelte";
@@ -142,6 +146,28 @@
 		else termPanel.toggle();
 	}
 
+	// The progress panel sits right of the panes and the terminal panel,
+	// for the focused conversation; it hides on narrow windows.
+	let mainW = $state(0);
+	// The focused conversation; while another kind of tab has focus, the last
+	// focused conversation that is still on screen (so the panel doesn't jump).
+	const focusedConv = $derived(currentConv());
+	let lastConvId = $state<string | null>(null);
+	$effect(() => {
+		if (focusedConv) lastConvId = focusedConv.id;
+	});
+	const panelConv = $derived.by(() => {
+		if (focusedConv) return focusedConv;
+		const onScreen = layout
+			.leaves()
+			.map((l) => (l.active ? layout.tabs[l.active] : undefined))
+			.filter((t) => t?.kind === "conversation" && t.ref)
+			.map((t) => t!.ref!);
+		const id = lastConvId && onScreen.includes(lastConvId) ? lastConvId : onScreen[0];
+		return id ? conversations.get(id) : undefined;
+	});
+	const rightConv = $derived(prefs.progressPanel && mainW >= 860 ? panelConv : null);
+
 	// The terminal panel's height, dragged or with the arrow keys.
 	let mainEl = $state<HTMLElement>();
 	function dragPanel(e: PointerEvent) {
@@ -223,37 +249,62 @@
 			</Resizable.Pane>
 			<Resizable.Handle />
 			<Resizable.Pane defaultSize={100 - (layout.sidebar.collapsed ? 0 : layout.sidebar.size)}>
-				<main class="bg-background flex h-full min-w-0 flex-col" bind:this={mainEl}>
-					<div class="min-h-0 flex-1 {termPanel.open && termPanel.maximized ? 'hidden' : ''}">
-						<PaneView node={layout.root} sidebarCollapsed={layout.sidebar.collapsed} onExpandSidebar={expandSidebar} />
-					</div>
-					{#if termPanel.open}
-						{#if !termPanel.maximized}
-							<div class="relative z-20 h-0 shrink-0">
-								<!-- A focusable window splitter (ARIA separator), moved with the arrow keys. -->
-								<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
-								<div
-									class="hover:bg-primary/50 focus-visible:bg-primary/60 absolute inset-x-0 -top-[3px] h-[6px] cursor-row-resize transition-colors outline-none"
-									role="separator"
-									aria-orientation="horizontal"
-									aria-label="Resize terminal panel"
-									aria-valuenow={Math.round(termPanel.size)}
-									aria-valuemin={12}
-									aria-valuemax={85}
-									tabindex="0"
-									onpointerdown={dragPanel}
-									onkeydown={panelKey}
-									ondblclick={() => termPanel.toggleMaximize()}
-								></div>
+				<main class="bg-background flex h-full min-w-0" bind:clientWidth={mainW}>
+					<!-- Center: panes, with the terminal panel under them only. -->
+					<div class="flex h-full min-w-0 flex-1 flex-col" bind:this={mainEl}>
+						<div class="min-h-0 flex-1 {termPanel.open && termPanel.maximized ? 'hidden' : ''}">
+							<PaneView node={layout.root} sidebarCollapsed={layout.sidebar.collapsed} onExpandSidebar={expandSidebar} />
+						</div>
+						{#if termPanel.open}
+							{#if !termPanel.maximized}
+								<div class="relative z-20 h-0 shrink-0">
+									<!-- A focusable window splitter (ARIA separator), moved with the arrow keys. -->
+									<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
+									<div
+										class="hover:bg-primary/50 focus-visible:bg-primary/60 absolute inset-x-0 -top-[3px] h-[6px] cursor-row-resize transition-colors outline-none"
+										role="separator"
+										aria-orientation="horizontal"
+										aria-label="Resize terminal panel"
+										aria-valuenow={Math.round(termPanel.size)}
+										aria-valuemin={12}
+										aria-valuemax={85}
+										tabindex="0"
+										onpointerdown={dragPanel}
+										onkeydown={panelKey}
+										ondblclick={() => termPanel.toggleMaximize()}
+									></div>
+								</div>
+							{/if}
+							<div
+								class="min-h-0 {termPanel.maximized ? 'flex-1' : 'shrink-0'}"
+								style:height={termPanel.maximized ? undefined : `${termPanel.size}%`}
+								transition:slide={{ duration: 200 }}
+							>
+								<TerminalPanel />
 							</div>
 						{/if}
-						<div
-							class="min-h-0 {termPanel.maximized ? 'flex-1' : 'shrink-0'}"
-							style:height={termPanel.maximized ? undefined : `${termPanel.size}%`}
-							transition:slide={{ duration: 200 }}
-						>
-							<TerminalPanel />
-						</div>
+					</div>
+					<!-- Right: progress of the focused conversation, full height beside the terminal panel. -->
+					{#if rightConv}
+						<aside class="border-border bg-sidebar/40 flex h-full w-64 shrink-0 flex-col border-s" aria-label="Progress" transition:slide={{ axis: "x", duration: 200 }}>
+							<header class="border-border flex h-(--tab-h) shrink-0 items-center gap-1.5 border-b ps-3 pe-1.5" data-tauri-drag-region>
+								<span class="shrink-0 text-[13px] font-medium" data-tauri-drag-region>Progress</span>
+								{#if layout.leaves().length > 1}<span class="text-muted-foreground min-w-0 truncate text-[12px]" dir="auto" title={rightConv.title}
+										>· {rightConv.title}</span
+									>{/if}
+								<Button
+									variant="ghost"
+									size="icon-sm"
+									class="text-muted-foreground hover:text-foreground ms-auto"
+									aria-label="Hide progress panel"
+									title="Hide progress panel ({isMac ? '⌥⌘P' : 'Ctrl+Alt+P'})"
+									onclick={() => prefs.set("progressPanel", false)}><PanelRightClose /></Button
+								>
+							</header>
+							<div class="min-h-0 flex-1">
+								{#key rightConv.id}<ProgressPanel conv={rightConv} />{/key}
+							</div>
+						</aside>
 					{/if}
 				</main>
 			</Resizable.Pane>
