@@ -1,4 +1,12 @@
 import "./app.css";
+
+// The theme saved last time, before anything paints (no flash of Sade).
+try {
+	const vars = JSON.parse(localStorage.getItem("glaude.theme.boot") ?? "null") as Record<string, string> | null;
+	if (vars) for (const [k, v] of Object.entries(vars)) document.documentElement.style.setProperty(k, v);
+} catch {
+	/* ignore */
+}
 import { mount } from "svelte";
 import App from "./App.svelte";
 import { inTauri } from "$lib/ipc";

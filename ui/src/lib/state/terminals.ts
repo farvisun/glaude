@@ -12,6 +12,8 @@ import { openLink, showError } from "./sessions";
 import type { TermSpec } from "./layout.svelte";
 import { prefs } from "./prefs.svelte";
 import { proxies } from "./proxies.svelte";
+import { themes } from "$lib/themes/themes.svelte";
+import { xtermTheme } from "$lib/themes/vars";
 
 interface Entry {
 	term: Terminal;
@@ -34,61 +36,9 @@ export function onTitle(fn: (id: string, title: string) => void) {
 	titleHandler = fn;
 }
 
-const ANSI_DARK = {
-	black: "#1b2233",
-	red: "#f0716b",
-	green: "#7fd18b",
-	yellow: "#f2c66d",
-	blue: "#6fa8f5",
-	magenta: "#c79cf2",
-	cyan: "#5cc8bd",
-	white: "#d5dbe6",
-	brightBlack: "#5d6880",
-	brightRed: "#ff8f88",
-	brightGreen: "#9ee3a8",
-	brightYellow: "#ffd98a",
-	brightBlue: "#92bfff",
-	brightMagenta: "#dcb8ff",
-	brightCyan: "#84e0d6",
-	brightWhite: "#f4f7fb",
-};
-
-const ANSI_LIGHT = {
-	black: "#1c2333",
-	red: "#c4372f",
-	green: "#2c7a3a",
-	yellow: "#946200",
-	blue: "#2459b8",
-	magenta: "#8a3fb8",
-	cyan: "#0f7f76",
-	white: "#c9cfda",
-	brightBlack: "#5d6880",
-	brightRed: "#d9534c",
-	brightGreen: "#3a9a4b",
-	brightYellow: "#b07a00",
-	brightBlue: "#3b74d6",
-	brightMagenta: "#a259d1",
-	brightCyan: "#159a90",
-	brightWhite: "#ffffff",
-};
-
-function cssVar(name: string): string {
-	return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-}
-
+/** Colours from Settings → Appearance → Terminal theme. */
 function theme(): ITheme {
-	const dark = document.documentElement.classList.contains("dark");
-	const bg = cssVar("--code-bg") || (dark ? "#0d1628" : "#eef2f8");
-	const fg = cssVar("--foreground") || (dark ? "#e4eaf4" : "#15203a");
-	const primary = cssVar("--primary") || "#5cc8bd";
-	return {
-		background: bg,
-		foreground: fg,
-		cursor: primary,
-		cursorAccent: bg,
-		selectionBackground: primary + "55",
-		...(dark ? ANSI_DARK : ANSI_LIGHT),
-	};
+	return xtermTheme(themes.terminal, prefs.accent);
 }
 
 /** Font and cursor from Settings → Terminal. */
@@ -110,7 +60,7 @@ export function reconfigure() {
 	}
 }
 
-/** Re-theme every terminal (light/dark or palette change). */
+/** Re-theme every terminal (mode, theme or accent change). */
 export function retheme() {
 	const t = theme();
 	for (const e of entries.values()) e.term.options.theme = t;

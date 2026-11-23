@@ -1,6 +1,5 @@
 // UI preferences kept in localStorage, applied live (zoom, density, fonts).
 
-export type Palette = "sade" | "lajevard" | "dood";
 /** Where file links from replies open. */
 export type Editor = "default" | "vscode" | "cursor" | "zed";
 export type Density = "comfortable" | "compact";
@@ -22,7 +21,14 @@ export const widths: Record<MessageWidth, string> = { narrow: "44rem", default: 
 
 /** Everything saved; new fields get their default when missing. */
 const defaults = {
-	palette: "sade" as Palette,
+	/** Window themes for light and dark mode (ids from $lib/themes). */
+	lightTheme: "sade-light",
+	darkTheme: "sade-dark",
+	/** "theme" (the theme's own), an accent id, or "#rrggbb". */
+	accent: "theme",
+	/** "app", "app-light", "app-dark" or a theme id. */
+	chatTheme: "app",
+	termTheme: "app",
 	/** Animations for panels, tabs and menus (off also when the OS asks for less motion). */
 	motion: true,
 	progressPanel: true,
@@ -64,7 +70,11 @@ const defaults = {
 export type Prefs = typeof defaults;
 
 class PrefStore {
-	palette = $state(defaults.palette);
+	lightTheme = $state(defaults.lightTheme);
+	darkTheme = $state(defaults.darkTheme);
+	accent = $state(defaults.accent);
+	chatTheme = $state(defaults.chatTheme);
+	termTheme = $state(defaults.termTheme);
 	motion = $state(defaults.motion);
 	progressPanel = $state(defaults.progressPanel);
 	statuslineScript = $state(defaults.statuslineScript);
@@ -96,15 +106,18 @@ class PrefStore {
 		try {
 			const saved = JSON.parse(localStorage.getItem(KEY) ?? "null") as Partial<Prefs> | null;
 			if (saved) this.assign(saved);
-			// The flat design (2026-11) brought the Sade palette; move the old
-			// default over once. Picking Lajevard again sticks.
-			if (!localStorage.getItem("glaude.design.v2")) {
-				localStorage.setItem("glaude.design.v2", "1");
-				if (this.palette === "lajevard") {
-					this.palette = "sade";
-					this.save();
+			// Palettes (Sade, Lajevard, Dood) became themes with a light and a
+			// dark variant. The flat design (2026-11) moved Lajevard to Sade once.
+			const old = (saved as { palette?: string } | null)?.palette;
+			if (saved && old && !("lightTheme" in saved)) {
+				const p = old === "lajevard" && !localStorage.getItem("glaude.design.v2") ? "sade" : old;
+				if (["sade", "lajevard", "dood"].includes(p)) {
+					this.lightTheme = `${p}-light`;
+					this.darkTheme = `${p}-dark`;
 				}
+				this.save();
 			}
+			localStorage.setItem("glaude.design.v2", "1");
 		} catch {
 			/* ignore corrupt prefs */
 		}
@@ -131,10 +144,6 @@ class PrefStore {
 	set<K extends keyof Prefs>(key: K, value: Prefs[K]) {
 		(this as unknown as Prefs)[key] = value;
 		this.save();
-	}
-
-	setPalette(p: Palette) {
-		this.set("palette", p);
 	}
 
 	/** Put every setting in a group back to its default. */

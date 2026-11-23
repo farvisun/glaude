@@ -16,6 +16,7 @@
 	import PathMenu from "$lib/components/PathMenu.svelte";
 	import ProxyEditor from "$lib/components/ProxyEditor.svelte";
 	import ProjectEditor from "$lib/components/ProjectEditor.svelte";
+	import ThemeEditor from "$lib/components/theme/ThemeEditor.svelte";
 	import SessionRename from "$lib/components/SessionRename.svelte";
 	import TerminalPanel from "$lib/components/TerminalPanel.svelte";
 	import { termPanel } from "$lib/state/termpanel.svelte";
@@ -30,6 +31,8 @@
 	import { dispose as disposeTerminal, retheme, reconfigure as reconfigureTerminals } from "$lib/state/terminals";
 	import { layout } from "$lib/state/layout.svelte";
 	import { conversations } from "$lib/state/conversations.svelte";
+	import { themes } from "$lib/themes/themes.svelte";
+	import { applyVars, themeVars, xtermTheme } from "$lib/themes/vars";
 	import { onKey as runShortcut, startCommands, currentConv, menuOwned } from "$lib/state/commands.svelte";
 	import { ui } from "$lib/state/ui.svelte";
 	import { prefs, isMac, widths } from "$lib/state/prefs.svelte";
@@ -50,15 +53,20 @@
 		if (tab.kind === "terminal") disposeTerminal(tab.id);
 	};
 
-	// Terminals read their colors from the theme variables.
+	// The window's theme as variables on <html> (kept for the next start's
+	// first paint), and the terminals' colours.
 	$effect(() => {
-		void prefs.palette;
-		void mode.current;
-		requestAnimationFrame(retheme);
+		const vars = themeVars(themes.app, prefs.accent);
+		applyVars(document.documentElement, vars);
+		try {
+			localStorage.setItem("glaude.theme.boot", JSON.stringify(vars));
+		} catch {
+			/* storage full: the first paint uses Sade */
+		}
 	});
-
 	$effect(() => {
-		document.documentElement.dataset.palette = prefs.palette;
+		void xtermTheme(themes.terminal, prefs.accent);
+		requestAnimationFrame(retheme);
 	});
 
 	// Settings → Appearance, applied live.
@@ -218,6 +226,7 @@
 <PathMenu />
 <ProxyEditor />
 <ProjectEditor />
+<ThemeEditor />
 <SessionRename />
 
 <Tooltip.Provider delayDuration={400}>

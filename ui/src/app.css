@@ -2,7 +2,9 @@
 @import "tw-animate-css";
 @import "shadcn-svelte/tailwind.css";
 
-@custom-variant dark (&:is(.dark *));
+/* Dark styles follow the nearest theme: the window, or a chat/terminal island
+   with its own theme (.dark or .light on the island). */
+@custom-variant dark (&:where(.dark, .dark *):not(:where(.light, .light *)));
 
 /* Inter for Latin, Estedad for Persian (variable weight 100-900). Both are
    bundled; the Arabic-script ranges always come from Estedad. */
@@ -75,11 +77,11 @@
 }
 
 /* ---------------------------------------------------------------------------
-   Palette "Sade" (plain, the default): neutral grounds, hairline borders that
-   are tints of the text colour, a monochrome primary and blue links.
+   Theme tokens. Themes live in src/lib/themes and are set as inline variables
+   on <html> (and on chat/terminal islands); these Sade values are only the
+   first paint before the script runs.
    ------------------------------------------------------------------------- */
-:root,
-[data-palette="sade"] {
+:root {
 	--background: #fcfcfd;
 	--foreground: #0d0f14;
 	--card: #ffffff;
@@ -116,9 +118,7 @@
 	--codex: #3d6fd8;
 }
 
-.dark,
-.dark [data-palette="sade"],
-[data-palette="sade"].dark {
+.dark {
 	--background: #0b0c0f;
 	--foreground: #ececf1;
 	--card: #111216;
@@ -155,160 +155,13 @@
 	--codex: #7aa2ff;
 }
 
-/* ---------------------------------------------------------------------------
-   Palette "Lajevard" (lapis): deep lapis ink, firuzeh (turquoise) accent,
-   saffron for anything that needs the user's attention.
-   ------------------------------------------------------------------------- */
-[data-palette="lajevard"] {
-	--background: #f4f6fa;
-	--foreground: #15203a;
-	--card: #ffffff;
-	--card-foreground: #15203a;
-	--popover: #ffffff;
-	--popover-foreground: #15203a;
-	--primary: #0f7f76;
-	--primary-foreground: #f4fbfa;
-	--secondary: #e6ebf3;
-	--secondary-foreground: #15203a;
-	--muted: #e9edf4;
-	--muted-foreground: #5b6b86;
-	--accent: #e1e8f2;
-	--accent-foreground: #15203a;
-	--destructive: #c2413b;
-	--border: #d7deea;
-	--input: #cfd7e5;
-	--ring: #0f7f76;
-	--sidebar: #eaeef5;
-	--sidebar-foreground: #15203a;
-	--sidebar-primary: #0f7f76;
-	--sidebar-primary-foreground: #f4fbfa;
-	--sidebar-accent: #dbe3ef;
-	--sidebar-accent-foreground: #15203a;
-	--sidebar-border: #d3dbe8;
-	--sidebar-ring: #0f7f76;
-
-	--attention: #b7791f;
-	--attention-foreground: #fff8ea;
-	--ok: #2f855a;
-	--code-bg: #eef2f8;
-	--user-bubble: #e3ecf6;
-	--claude: #c8663d;
-	--codex: #3d6fd8;
-}
-
-.dark [data-palette="lajevard"],
-[data-palette="lajevard"].dark {
-	--background: #101a2e;
-	--foreground: #e4eaf4;
-	--card: #16233b;
-	--card-foreground: #e4eaf4;
-	--popover: #1a2943;
-	--popover-foreground: #e4eaf4;
-	--primary: #5cc8bd;
-	--primary-foreground: #0b1a1f;
-	--secondary: #1e2e4a;
-	--secondary-foreground: #e4eaf4;
-	--muted: #1a2944;
-	--muted-foreground: #8d9eba;
-	--accent: #22355a;
-	--accent-foreground: #e4eaf4;
-	--destructive: #ef6b6b;
-	--border: #26385a;
-	--input: #2c4066;
-	--ring: #5cc8bd;
-	--sidebar: #0c1526;
-	--sidebar-foreground: #d5ddeb;
-	--sidebar-primary: #5cc8bd;
-	--sidebar-primary-foreground: #0b1a1f;
-	--sidebar-accent: #172540;
-	--sidebar-accent-foreground: #e4eaf4;
-	--sidebar-border: #1d2c48;
-	--sidebar-ring: #5cc8bd;
-
-	--attention: #f2b544;
-	--attention-foreground: #1f1605;
-	--ok: #63c98b;
-	--code-bg: #0d1628;
-	--user-bubble: #1b2b48;
-	--claude: #e58a5f;
-	--codex: #7aa2ff;
-}
-
-/* ---------------------------------------------------------------------------
-   Palette "Dood" (smoke): quiet graphite neutrals with an indigo accent,
-   for long sessions where the text should be the only colour on screen.
-   ------------------------------------------------------------------------- */
-[data-palette="dood"] {
-	--background: #f6f6f7;
-	--foreground: #1c1d21;
-	--card: #ffffff;
-	--card-foreground: #1c1d21;
-	--popover: #ffffff;
-	--popover-foreground: #1c1d21;
-	--primary: #4f5bd5;
-	--primary-foreground: #f7f7ff;
-	--secondary: #ececef;
-	--secondary-foreground: #1c1d21;
-	--muted: #efeff2;
-	--muted-foreground: #6a6c75;
-	--accent: #e8e8ec;
-	--accent-foreground: #1c1d21;
-	--destructive: #c4372f;
-	--border: #e0e0e5;
-	--input: #d6d6dd;
-	--ring: #4f5bd5;
-	--sidebar: #efeff1;
-	--sidebar-foreground: #1c1d21;
-	--sidebar-primary: #4f5bd5;
-	--sidebar-primary-foreground: #f7f7ff;
-	--sidebar-accent: #e4e4e9;
-	--sidebar-accent-foreground: #1c1d21;
-	--sidebar-border: #e0e0e5;
-	--sidebar-ring: #4f5bd5;
-	--attention: #b45309;
-	--attention-foreground: #fff7ed;
-	--ok: #2f7d4f;
-	--code-bg: #f0f0f3;
-	--user-bubble: #ebebf0;
-	--claude: #c8663d;
-	--codex: #4f6fd8;
-}
-
-.dark [data-palette="dood"],
-[data-palette="dood"].dark {
-	--background: #18181b;
-	--foreground: #e7e7ea;
-	--card: #1f1f23;
-	--card-foreground: #e7e7ea;
-	--popover: #232327;
-	--popover-foreground: #e7e7ea;
-	--primary: #9aa4ff;
-	--primary-foreground: #14152a;
-	--secondary: #26262b;
-	--secondary-foreground: #e7e7ea;
-	--muted: #232327;
-	--muted-foreground: #9a9ba3;
-	--accent: #2b2b31;
-	--accent-foreground: #e7e7ea;
-	--destructive: #f07167;
-	--border: #2e2e34;
-	--input: #35353c;
-	--ring: #9aa4ff;
-	--sidebar: #141417;
-	--sidebar-foreground: #d9d9de;
-	--sidebar-primary: #9aa4ff;
-	--sidebar-primary-foreground: #14152a;
-	--sidebar-accent: #222226;
-	--sidebar-accent-foreground: #e7e7ea;
-	--sidebar-border: #26262b;
-	--sidebar-ring: #9aa4ff;
-	--attention: #f5b041;
-	--attention-foreground: #1f1605;
-	--ok: #6cc48f;
-	--code-bg: #131316;
-	--user-bubble: #26262c;
-	--claude: #e58a5f;
-	--codex: #8aa6ff;
+/* A part of the window with its own theme paints its own ground (a base
+   style, so a bg-* utility on the same element still wins). */
+@layer base {
+	.theme-island {
+		background: var(--background);
+		color: var(--foreground);
+	}
 }
 
 @theme inline {
@@ -665,22 +518,47 @@
 	margin-inline-end: 0.4em;
 }
 
-/* syntect class-based highlighting (base16-ish, follows palette). */
+/* syntect class-based highlighting; colours come from the theme (--syn-*). */
 :is(.prose-g, .code-view) .hl-comment {
-	color: var(--muted-foreground);
+	color: var(--syn-comment, var(--muted-foreground));
 	font-style: italic;
 }
 :is(.prose-g, .code-view) :is(.hl-keyword, .hl-storage) {
-	color: var(--codex);
+	color: var(--syn-keyword, var(--codex));
+}
+:is(.prose-g, .code-view) .hl-keyword.hl-operator {
+	color: var(--syn-operator, var(--syn-keyword));
 }
 :is(.prose-g, .code-view) .hl-string {
-	color: var(--ok);
+	color: var(--syn-string, var(--ok));
 }
 :is(.prose-g, .code-view) :is(.hl-constant, .hl-number) {
-	color: var(--attention);
+	color: var(--syn-number, var(--attention));
 }
-:is(.prose-g, .code-view) :is(.hl-entity, .hl-function) {
-	color: var(--claude);
+:is(.prose-g, .code-view) :is(.hl-entity, .hl-function, .hl-support.hl-function) {
+	color: var(--syn-function, var(--claude));
+}
+:is(.prose-g, .code-view) :is(.hl-entity.hl-name.hl-type, .hl-entity.hl-name.hl-class, .hl-support.hl-type, .hl-support.hl-class) {
+	color: var(--syn-type, var(--claude));
+}
+:is(.prose-g, .code-view) :is(.hl-variable.hl-parameter, .hl-variable.hl-language) {
+	color: var(--syn-variable, inherit);
+}
+:is(.prose-g, .code-view) .hl-entity.hl-name.hl-tag {
+	color: var(--syn-tag, var(--syn-keyword));
+}
+:is(.prose-g, .code-view) .hl-entity.hl-other.hl-attribute-name {
+	color: var(--syn-attribute, var(--syn-number));
+}
+:is(.prose-g, .code-view) .hl-markup.hl-inserted {
+	color: var(--syn-string);
+}
+:is(.prose-g, .code-view) .hl-markup.hl-deleted {
+	color: var(--destructive);
+}
+:is(.prose-g, .code-view) .hl-markup.hl-heading {
+	color: var(--syn-keyword);
+	font-weight: 600;
 }
 
 /* Paths in replies that exist on disk (see state/paths.ts). */
@@ -698,71 +576,75 @@
 	scrollbar-width: thin;
 }
 
-/* ANSI colours from statusline scripts (same palette as the terminal). */
-.ansi-fg-0 { color: #1c2333; }
-.dark .ansi-fg-0 { color: #1b2233; }
-.ansi-bg-0 { background: #1c2333; }
-.dark .ansi-bg-0 { background: #1b2233; }
-.ansi-fg-1 { color: #c4372f; }
-.dark .ansi-fg-1 { color: #f0716b; }
-.ansi-bg-1 { background: #c4372f; }
-.dark .ansi-bg-1 { background: #f0716b; }
-.ansi-fg-2 { color: #2c7a3a; }
-.dark .ansi-fg-2 { color: #7fd18b; }
-.ansi-bg-2 { background: #2c7a3a; }
-.dark .ansi-bg-2 { background: #7fd18b; }
-.ansi-fg-3 { color: #946200; }
-.dark .ansi-fg-3 { color: #f2c66d; }
-.ansi-bg-3 { background: #946200; }
-.dark .ansi-bg-3 { background: #f2c66d; }
-.ansi-fg-4 { color: #2459b8; }
-.dark .ansi-fg-4 { color: #6fa8f5; }
-.ansi-bg-4 { background: #2459b8; }
-.dark .ansi-bg-4 { background: #6fa8f5; }
-.ansi-fg-5 { color: #8a3fb8; }
-.dark .ansi-fg-5 { color: #c79cf2; }
-.ansi-bg-5 { background: #8a3fb8; }
-.dark .ansi-bg-5 { background: #c79cf2; }
-.ansi-fg-6 { color: #0f7f76; }
-.dark .ansi-fg-6 { color: #5cc8bd; }
-.ansi-bg-6 { background: #0f7f76; }
-.dark .ansi-bg-6 { background: #5cc8bd; }
-.ansi-fg-7 { color: #8a93a6; }
-.dark .ansi-fg-7 { color: #d5dbe6; }
-.ansi-bg-7 { background: #8a93a6; }
-.dark .ansi-bg-7 { background: #d5dbe6; }
-.ansi-fg-8 { color: #5d6880; }
-.dark .ansi-fg-8 { color: #5d6880; }
-.ansi-bg-8 { background: #5d6880; }
-.dark .ansi-bg-8 { background: #5d6880; }
-.ansi-fg-9 { color: #d9534c; }
-.dark .ansi-fg-9 { color: #ff8f88; }
-.ansi-bg-9 { background: #d9534c; }
-.dark .ansi-bg-9 { background: #ff8f88; }
-.ansi-fg-10 { color: #3a9a4b; }
-.dark .ansi-fg-10 { color: #9ee3a8; }
-.ansi-bg-10 { background: #3a9a4b; }
-.dark .ansi-bg-10 { background: #9ee3a8; }
-.ansi-fg-11 { color: #b07a00; }
-.dark .ansi-fg-11 { color: #ffd98a; }
-.ansi-bg-11 { background: #b07a00; }
-.dark .ansi-bg-11 { background: #ffd98a; }
-.ansi-fg-12 { color: #3b74d6; }
-.dark .ansi-fg-12 { color: #92bfff; }
-.ansi-bg-12 { background: #3b74d6; }
-.dark .ansi-bg-12 { background: #92bfff; }
-.ansi-fg-13 { color: #a259d1; }
-.dark .ansi-fg-13 { color: #dcb8ff; }
-.ansi-bg-13 { background: #a259d1; }
-.dark .ansi-bg-13 { background: #dcb8ff; }
-.ansi-fg-14 { color: #159a90; }
-.dark .ansi-fg-14 { color: #84e0d6; }
-.ansi-bg-14 { background: #159a90; }
-.dark .ansi-bg-14 { background: #84e0d6; }
-.ansi-fg-15 { color: #1c2333; }
-.dark .ansi-fg-15 { color: #f4f7fb; }
-.ansi-bg-15 { background: #1c2333; }
-.dark .ansi-bg-15 { background: #f4f7fb; }
+/* ANSI colours from statusline scripts: the theme's 16 terminal colours. */
+:root {
+	--ansi-0: #1c2333;
+	--ansi-1: #c4372f;
+	--ansi-2: #2c7a3a;
+	--ansi-3: #946200;
+	--ansi-4: #2459b8;
+	--ansi-5: #8a3fb8;
+	--ansi-6: #0f7f76;
+	--ansi-7: #c9cfda;
+	--ansi-8: #5d6880;
+	--ansi-9: #d9534c;
+	--ansi-10: #3a9a4b;
+	--ansi-11: #b07a00;
+	--ansi-12: #3b74d6;
+	--ansi-13: #a259d1;
+	--ansi-14: #159a90;
+	--ansi-15: #ffffff;
+}
+.dark {
+	--ansi-0: #1b2233;
+	--ansi-1: #f0716b;
+	--ansi-2: #7fd18b;
+	--ansi-3: #f2c66d;
+	--ansi-4: #6fa8f5;
+	--ansi-5: #c79cf2;
+	--ansi-6: #5cc8bd;
+	--ansi-7: #d5dbe6;
+	--ansi-8: #5d6880;
+	--ansi-9: #ff8f88;
+	--ansi-10: #9ee3a8;
+	--ansi-11: #ffd98a;
+	--ansi-12: #92bfff;
+	--ansi-13: #dcb8ff;
+	--ansi-14: #84e0d6;
+	--ansi-15: #f4f7fb;
+}
+.ansi-fg-0 { color: var(--ansi-0); }
+.ansi-bg-0 { background: var(--ansi-0); }
+.ansi-fg-1 { color: var(--ansi-1); }
+.ansi-bg-1 { background: var(--ansi-1); }
+.ansi-fg-2 { color: var(--ansi-2); }
+.ansi-bg-2 { background: var(--ansi-2); }
+.ansi-fg-3 { color: var(--ansi-3); }
+.ansi-bg-3 { background: var(--ansi-3); }
+.ansi-fg-4 { color: var(--ansi-4); }
+.ansi-bg-4 { background: var(--ansi-4); }
+.ansi-fg-5 { color: var(--ansi-5); }
+.ansi-bg-5 { background: var(--ansi-5); }
+.ansi-fg-6 { color: var(--ansi-6); }
+.ansi-bg-6 { background: var(--ansi-6); }
+.ansi-fg-7 { color: var(--ansi-7); }
+.ansi-bg-7 { background: var(--ansi-7); }
+.ansi-fg-8 { color: var(--ansi-8); }
+.ansi-bg-8 { background: var(--ansi-8); }
+.ansi-fg-9 { color: var(--ansi-9); }
+.ansi-bg-9 { background: var(--ansi-9); }
+.ansi-fg-10 { color: var(--ansi-10); }
+.ansi-bg-10 { background: var(--ansi-10); }
+.ansi-fg-11 { color: var(--ansi-11); }
+.ansi-bg-11 { background: var(--ansi-11); }
+.ansi-fg-12 { color: var(--ansi-12); }
+.ansi-bg-12 { background: var(--ansi-12); }
+.ansi-fg-13 { color: var(--ansi-13); }
+.ansi-bg-13 { background: var(--ansi-13); }
+.ansi-fg-14 { color: var(--ansi-14); }
+.ansi-bg-14 { background: var(--ansi-14); }
+.ansi-fg-15 { color: var(--ansi-15); }
+.ansi-bg-15 { background: var(--ansi-15); }
 
 /* Loading placeholders: a soft highlight sweeping across, like Claude's. */
 :root {
