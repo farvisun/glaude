@@ -57,7 +57,7 @@ const mockAccounts = [
 		active: true, email: "me@example.com", plan: "prolite", tokens: 34_743_027_618, tokens7d: 339_413_329, sessions: 4070, launches: 77,
 		week: { used: 21, resetsAt: new Date(Date.now() + 2.7 * 86400e3).toISOString() }, lastUsed: new Date(Date.now() - 3600e3).toISOString(),
 	}),
-	mockAccount("codex", "varahome", { email: "(api key)", plan: "", sharedLinked: 21 }),
+	mockAccount("codex", "side_project", { email: "(api key)", plan: "", sharedLinked: 21 }),
 ];
 
 function esc(s: string) {
@@ -608,9 +608,9 @@ function mockControl(convId: string, req: Record<string, unknown>): unknown {
 		case "mcp_status":
 			return {
 				mcpServers: [
-					{ name: "context", status: "connected", scope: "user", transport: "http", serverInfo: { name: "context-hub", version: "1.4.0" }, tools: [{ name: "search" }, { name: "get" }, { name: "remember" }] },
+					{ name: "notes", status: "connected", scope: "user", transport: "http", serverInfo: { name: "notes-hub", version: "1.4.0" }, tools: [{ name: "search" }, { name: "get" }, { name: "remember" }] },
 					{ name: "figma", status: "failed", scope: "user", transport: "http", error: "502 Bad Gateway" },
-					{ name: "taskie", status: "connected", scope: "user", transport: "http", tools: [{ name: "task_create" }, { name: "task_list" }] },
+					{ name: "tracker", status: "connected", scope: "user", transport: "http", tools: [{ name: "task_create" }, { name: "task_list" }] },
 					{ name: "webstorm", status: "disabled", scope: "local", transport: "sse" },
 				],
 			};
@@ -620,9 +620,9 @@ function mockControl(convId: string, req: Record<string, unknown>): unknown {
 		case "get_skills_dialog":
 			return {
 				skills: [
-					{ name: "codex-image", description: "Generate raster images by delegating to Codex.", source: "userSettings", tokens: 210, state: "on" },
+					{ name: "release-notes", description: "Write user-facing release notes from the commits.", source: "userSettings", tokens: 210, state: "on" },
 					{ name: "commit", description: "Commit pending changes as logical Conventional Commits.", source: "userSettings", tokens: 96, state: "on" },
-					{ name: "taskie-work-log", description: "Record agent work as a Taskie task.", source: "userSettings", tokens: 140, state: "user-invocable-only" },
+					{ name: "work-log", description: "Record agent work in the team tracker.", source: "userSettings", tokens: 140, state: "user-invocable-only" },
 				],
 			};
 		case "get_hooks_listing":
