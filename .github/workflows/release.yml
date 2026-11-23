@@ -47,18 +47,26 @@ jobs:
         id: draft
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           TAG: ${{ steps.meta.outputs.tag }}
           VERSION: ${{ steps.meta.outputs.version }}
         run: |
-          if ! gh release view "$TAG" >/dev/null 2>&1; then
+          # Reuse the release when this tag is built again; otherwise create a
+          # draft and take its id from the response (the list endpoint can lag).
+          id="$(gh release view "$TAG" --json databaseId --jq .databaseId 2>/dev/null || true)"
+          if [ -z "$id" ]; then
             notes="docs/releases/$TAG.md"
             if [ -f "$notes" ]; then
-              gh release create "$TAG" --draft --verify-tag --title "Glaude $VERSION" --notes-file "$notes"
+              id="$(gh api -X POST "repos/$GH_REPO/releases" -f tag_name="$TAG" -f name="Glaude $VERSION" -F draft=true -F body=@"$notes" --jq .id)"
             else
-              gh release create "$TAG" --draft --verify-tag --title "Glaude $VERSION" --generate-notes
+              id="$(gh api -X POST "repos/$GH_REPO/releases" -f tag_name="$TAG" -f name="Glaude $VERSION" -F draft=true -F generate_release_notes=true --jq .id)"
             fi
           fi
-          id="$(gh api "repos/${{ github.repository }}/releases" --jq ".[] | select(.tag_name == \"$TAG\") | .id" | head -n1)"
+          if [ -z "$id" ]; then
+            echo "::error::Could not find or create the release for $TAG"
+            exit 1
+          fi
+          echo "Release id: $id"
           echo "release_id=$id" >> "$GITHUB_OUTPUT"
 
   build:
