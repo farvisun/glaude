@@ -83,7 +83,7 @@ jobs:
         working-directory: ui
       # Catches platform-specific code (cfg(windows), cfg(unix)) early.
       - name: Clippy for this platform
-        run: cargo clippy --workspace --target ${{ matrix.target }} -- -D warnings
+        run: cargo clippy --workspace --all-targets --keep-going --target ${{ matrix.target }} -- -D warnings
       - name: Build bundles
         uses: tauri-apps/tauri-action@v0
         with:
