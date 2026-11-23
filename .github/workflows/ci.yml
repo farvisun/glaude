@@ -85,7 +85,7 @@ jobs:
       - name: Clippy for this platform
         run: cargo clippy --workspace --all-targets --keep-going --target ${{ matrix.target }} -- -D warnings
       - name: Build bundles
-        uses: tauri-apps/tauri-action@v0
+        uses: tauri-apps/tauri-action@v1
         with:
           tauriScript: bunx @tauri-apps/cli@2
           args: --target ${{ matrix.target }}
