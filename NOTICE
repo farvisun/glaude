@@ -1,0 +1,14 @@
+Glaude
+Copyright 2026 The Glaude Authors
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+It bundles third-party fonts under the SIL Open Font License 1.1:
+- Estedad, Copyright The Estedad Project Authors (https://github.com/aminabedi68/Estedad)
+- Inter, Copyright The Inter Project Authors (https://github.com/rsms/inter)
+
+The landing page uses icons from Lucide (https://lucide.dev), ISC License.
+
+Claude is a trademark of Anthropic, PBC. Codex is a trademark of OpenAI.
+Glaude is an independent project and is not affiliated with or endorsed by
+either company.
