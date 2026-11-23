@@ -148,19 +148,21 @@ fn runs_as_program(p: &Path) -> bool {
         "webloc",
         "inetloc",
     ];
-    if RISKY.contains(&ext.as_str()) {
-        return true;
-    }
+    RISKY.contains(&ext.as_str()) || has_exec_bit(p)
+}
+
+/// A file with an execute bit. Windows has none: the extension decides.
+fn has_exec_bit(p: &Path) -> bool {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        if let Ok(m) = std::fs::metadata(p) {
-            if m.is_file() && m.permissions().mode() & 0o111 != 0 {
-                return true;
-            }
-        }
+        std::fs::metadata(p).is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
     }
-    false
+    #[cfg(not(unix))]
+    {
+        let _ = p;
+        false
+    }
 }
 
 fn editor_cli(editor: &str) -> Option<(&'static str, &'static str)> {
