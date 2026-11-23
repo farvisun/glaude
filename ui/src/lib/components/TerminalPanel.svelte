@@ -1,6 +1,7 @@
 <script lang="ts">
 	// The terminal panel (Ctrl+`): terminals in groups, split side by side,
 	// with a list of all of them when there is more than one.
+	import { themes } from "$lib/themes/themes.svelte";
 	import { termPanel } from "$lib/state/termpanel.svelte";
 	import { basename } from "$lib/format";
 	import { isMac } from "$lib/state/prefs.svelte";
@@ -19,6 +20,9 @@
 	import SquareTerminal from "@lucide/svelte/icons/square-terminal";
 	import Shield from "@lucide/svelte/icons/shield";
 	import { proxies } from "$lib/state/proxies.svelte";
+
+	// Settings → Appearance → Terminal theme, when it differs from the window's.
+	const termIsland = $derived(themes.terminalIsland);
 
 	const group = $derived(termPanel.groups.find((g) => g.id === termPanel.active) ?? termPanel.groups[0]);
 	const baseLabel = (id: string) => {
@@ -59,7 +63,11 @@
 	</Tooltip.Root>
 {/snippet}
 
-<section class="terminal-panel @container/term bg-code border-border flex h-full min-h-0 flex-col border-t" aria-label="Terminal">
+<section
+	class="terminal-panel @container/term border-border flex h-full min-h-0 flex-col border-t bg-(--term-bg) {termIsland ? `theme-island ${termIsland.kind}` : ''}"
+	style={termIsland?.style}
+	aria-label="Terminal"
+>
 	<!-- Maximized with the sidebar hidden, the macOS window buttons sit over this row. -->
 	<header
 		class="text-muted-foreground flex h-8 shrink-0 items-center gap-2 pe-1.5 text-[11px] {isMac && termPanel.maximized && layout.sidebar.collapsed

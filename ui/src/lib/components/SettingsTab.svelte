@@ -2,8 +2,8 @@
 	// Settings: sections on the side (a bottom sheet on narrow widths),
 	// search across all of them on top.
 	import { setContext } from "svelte";
-	import { prefs, isMac, type Palette, type Editor, type Prefs } from "$lib/state/prefs.svelte";
-	import { setMode, userPrefersMode } from "mode-watcher";
+	import { prefs, isMac, type Editor, type Prefs } from "$lib/state/prefs.svelte";
+	import AppearanceThemes from "./theme/AppearanceThemes.svelte";
 	import { Switch } from "$lib/components/ui/switch";
 	import { Input } from "$lib/components/ui/input";
 	import { Button } from "$lib/components/ui/button";
@@ -38,7 +38,7 @@
 	import { basename } from "$lib/format";
 
 	const sections = [
-		{ id: "appearance", title: "Appearance", icon: Palette_, keys: ["uiScale", "density", "motion", "codeFont", "codeFontCustom", "messageWidth"] },
+		{ id: "appearance", title: "Appearance", icon: Palette_, keys: ["lightTheme", "darkTheme", "accent", "chatTheme", "termTheme", "uiScale", "density", "motion", "codeFont", "codeFontCustom", "messageWidth"] },
 		{ id: "new", title: "New conversations", icon: MessageSquarePlus, keys: ["sendKey"] },
 		{ id: "conversations", title: "Conversations", icon: MessagesSquare, keys: ["statuslineScript", "progressPanel", "compactTools", "editor"] },
 		{ id: "background", title: "Background & alerts", icon: BellRing, keys: ["keepAgents", "idleMinutes", "notifyDone", "notifyWaiting", "notifyErrors", "notifyClosed", "notifySound", "alertWaitMinutes", "alertLongMinutes"] },
@@ -73,11 +73,6 @@
 	const visible = (id: SectionId) => searching || active === id;
 	const current = $derived(sections.find((s) => s.id === active) ?? sections[0]);
 
-	const palettes: { id: Palette; name: string; note: string; swatch: string[] }[] = [
-		{ id: "sade", name: "Sade", note: "Plain neutrals with a black and white accent", swatch: ["#0b0c0f", "#f1f2f5", "#7aa7ff", "#9a9ca8"] },
-		{ id: "lajevard", name: "Lajevard", note: "Lapis ink with a turquoise accent", swatch: ["#101a2e", "#5cc8bd", "#f2b544", "#e4eaf4"] },
-		{ id: "dood", name: "Dood", note: "Quiet graphite with an indigo accent", swatch: ["#18181b", "#9aa4ff", "#f5b041", "#e7e7ea"] },
-	];
 	const fonts = [
 		{ value: "system" as const, label: "System monospace" },
 		{ value: "sf" as const, label: "SF Mono" },
@@ -208,36 +203,7 @@
 			{#if visible("appearance")}
 				<section class="settings-section">
 					{@render header("Appearance", sections[0].keys)}
-					<SettingRow label="Theme" keywords="dark light mode">
-						<Segmented
-							label="Theme"
-							value={userPrefersMode.current}
-							options={[
-								{ value: "system", label: "System" },
-								{ value: "light", label: "Light" },
-								{ value: "dark", label: "Dark" },
-							]}
-							onChange={(m) => setMode(m)}
-						/>
-					</SettingRow>
-					<SettingRow label="Palette" keywords="colors accent" stacked>
-						<div class="grid w-full gap-2 sm:grid-cols-2">
-							{#each palettes as p (p.id)}
-								<button
-									class="border-border flex flex-col gap-2 rounded-lg border p-3 text-start {prefs.palette === p.id
-										? 'border-primary ring-primary/30 ring-2'
-										: 'hover:bg-accent/50'}"
-									onclick={() => prefs.setPalette(p.id)}
-								>
-									<div class="flex gap-1">
-										{#each p.swatch as c (c)}<span class="size-5 rounded" style:background={c}></span>{/each}
-									</div>
-									<div class="font-medium">{p.name}</div>
-									<div class="text-muted-foreground text-xs">{p.note}</div>
-								</button>
-							{/each}
-						</div>
-					</SettingRow>
+					<AppearanceThemes />
 					<SettingRow label="Interface size" description="Scales the whole window ({mod}+ and {mod}− work too)." keywords="zoom font text scale">
 						<div class="flex items-center gap-1">
 							<Button variant="outline" size="icon-sm" aria-label="Smaller" disabled={prefs.uiScale <= 0.75} onclick={() => prefs.zoom(-0.05)}><Minus /></Button>

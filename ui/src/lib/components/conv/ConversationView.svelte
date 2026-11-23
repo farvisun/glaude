@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { conversations } from "$lib/state/conversations.svelte";
 	import { prefs } from "$lib/state/prefs.svelte";
+	import { themes } from "$lib/themes/themes.svelte";
 	import { convActions, loadHistory, openLink, permissionModes } from "$lib/state/sessions";
 	import type { Item } from "$lib/types";
 	import ItemView from "./ItemView.svelte";
@@ -34,6 +35,8 @@
 	import { usePrompt } from "$lib/state/commands.svelte";
 
 	let { convId, active }: { convId: string; active: boolean } = $props();
+	// Settings → Appearance → Chat theme, when it differs from the window's.
+	const chatIsland = $derived(themes.chat);
 
 	const conv = $derived(conversations.get(convId));
 
@@ -450,7 +453,7 @@
 
 
 {#if conv}
-	<div class="@container flex h-full min-h-0">
+	<div class="@container flex h-full min-h-0 {chatIsland ? `theme-island ${chatIsland.kind}` : ''}" style={chatIsland?.style}>
 		<div class="flex min-w-0 flex-1 flex-col">
 			{#if conv.reviewOf}
 				<div class="border-border bg-card/60 flex items-center gap-2 border-b px-4 py-1.5 text-xs">

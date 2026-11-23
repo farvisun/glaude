@@ -32,6 +32,8 @@ class UiState {
 	proxyEdit = $state<import("./proxies.svelte").Proxy | "new" | null>(null);
 	/** Sidebar: the project being created ("new", optionally from a folder) or edited. */
 	projectEdit = $state<import("./projects.svelte").Project | { folder?: string } | null>(null);
+	/** Theme editor: a draft (new, imported) or one of the user's themes. */
+	themeEdit = $state<import("$lib/themes/types").Theme | null>(null);
 	/** Sidebar: the past session being renamed. */
 	renameSession = $state<import("./history.svelte").SessionSummary | null>(null);
 	/** Set by the app shell: show or hide the sidebar. */
