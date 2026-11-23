@@ -1,12 +1,53 @@
-# Glaude
+<p align="center">
+  <img src="site/assets/img/icon.png" width="88" height="88" alt="Glaude icon" />
+</p>
 
-A fast desktop UI for **Claude Code** and **Codex**, built for Persian and
-other right-to-left text. It drives the CLIs already installed and logged
-in on your computer: no separate login and no API key.
+<h1 align="center">Glaude</h1>
+
+<p align="center">
+  A fast desktop app for <b>Claude Code</b> and <b>Codex</b>, built for Persian and other right-to-left text.
+</p>
+
+<p align="center">
+  <a href="https://farvisun.github.io/glaude/">Website</a> ·
+  <a href="https://github.com/farvisun/glaude/releases/latest">Download</a> ·
+  <a href="#features">Features</a> ·
+  <a href="CONTRIBUTING.md">Contributing</a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/farvisun/glaude/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/farvisun/glaude/actions/workflows/ci.yml/badge.svg" /></a>
+  <a href="https://github.com/farvisun/glaude/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/farvisun/glaude?label=release" /></a>
+  <a href="LICENSE"><img alt="License: Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-blue" /></a>
+</p>
+
+<p align="center">
+  <img src="site/assets/img/rtl-light.webp" alt="Glaude with a Persian conversation: the prompt and reply read right to left, code stays left to right." />
+</p>
+
+Glaude drives the CLIs already installed and logged in on your computer: no
+separate login and no API key.
 
 Terminals have no bidi support, so Persian comes out reversed and mixed
 Persian/English lines jump around. Glaude renders every message block with
 its own direction, keeps code left-to-right, and uses the Estedad font.
+
+## Install
+
+Download the latest installer from
+[Releases](https://github.com/farvisun/glaude/releases/latest):
+
+| Platform | File |
+| --- | --- |
+| macOS 11+ (Apple silicon and Intel) | `Glaude_<version>_universal.dmg` |
+| Windows 10+ (64-bit) | `Glaude_<version>_x64-setup.exe` or `.msi` |
+| Linux (64-bit, WebKitGTK 4.1) | `.AppImage`, `.deb` or `.rpm` |
+
+Then install the `claude` and/or `codex` CLI and sign in once.
+
+The macOS build is not notarized yet: on first launch, open **System Settings
+→ Privacy & Security** and choose **Open Anyway** (or run
+`xattr -dr com.apple.quarantine /Applications/Glaude.app`).
 
 ## Features
 
@@ -205,7 +246,10 @@ bunx @tauri-apps/cli@2 build
 
 Bundles land in `target/release/bundle/` (`.app` and `.dmg` on macOS,
 `.deb` and `.AppImage` on Linux, `.msi` and `.exe` on Windows).
-`.github/workflows/ci.yml` builds all three platforms.
+`.github/workflows/ci.yml` checks and builds all three platforms on every
+push. Pushing a tag `vX.Y.Z` runs `.github/workflows/release.yml`, which
+builds the installers, attaches them with SHA-256 checksums and publishes the
+release (see [CONTRIBUTING.md](CONTRIBUTING.md#releases)).
 
 To build and install on this Mac:
 
@@ -230,9 +274,16 @@ crates/
 src-tauri/         Tauri app: commands, PTYs, settings, git, file links;
                    `host/` is the background agent host (`glaude --host`)
 ui/                Svelte 5 + Tailwind + shadcn-svelte, xterm.js
-docs/              protocol notes and the mamadoo port spec
+docs/              protocol notes, the mamadoo port spec, design notes, release notes
+site/              the landing page (GitHub Pages)
 fixtures/          recorded, scrubbed CLI sessions for tests
 ```
 
 Rust does the heavy work (processes, parsing, rendering, highlighting,
 diffs, scans, search); the webview places ready-made HTML blocks.
+
+## License
+
+[Apache License 2.0](LICENSE). See [NOTICE](NOTICE) for bundled fonts.
+Claude is a trademark of Anthropic, PBC and Codex is a trademark of OpenAI;
+Glaude is an independent project, not affiliated with or endorsed by either.
