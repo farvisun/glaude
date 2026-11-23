@@ -114,8 +114,15 @@ its own direction, keeps code left-to-right, and uses the Estedad font.
 - **Usage**: cost, tokens, turns and agent time per day, project and
   conversation for turns run in Glaude, plus every account's 5-hour and
   weekly limits. The progress panel shows a timeline of the latest turn.
-- **Settings** (Cmd+,): appearance (theme, palette, interface size, density,
-  animations, message width, code font), defaults for new conversations (tool, account,
+- **Themes**: about 25 light and dark themes (Sade, Lajevard, Dood, GitHub,
+  One, Solarized, Dracula, Tokyo Night, Nord, Catppuccin, Rosé Pine, Gruvbox,
+  Everforest) that colour the window, code and terminals; pick one for light
+  and one for dark mode, any accent colour, and separate themes for chats and
+  terminals (a dark chat in a light window, say). Make your own in the theme
+  editor, or import a VS Code theme, an iTerm2 scheme, or a Ghostty, kitty or
+  Windows Terminal scheme.
+- **Settings** (Cmd+,): appearance (mode, themes, accent, chat and terminal
+  themes, interface size, density, animations, message width, code font), defaults for new conversations (tool, account,
   model, effort, permissions, send key), background and alerts (keep agents
   working after quitting, idle stop time, which notifications, sound),
   terminal (font, size, cursor, shell), network (proxies), saved prompts
