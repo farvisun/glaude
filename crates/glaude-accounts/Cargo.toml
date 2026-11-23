@@ -13,6 +13,6 @@ tracing.workspace = true
 chrono.workspace = true
 regex.workspace = true
 base64.workspace = true
-rusqlite = { version = "0.37", features = ["bundled"] }
+rusqlite = { version = "0.43", features = ["bundled"] }
 walkdir = "2"
 memchr = "2"
