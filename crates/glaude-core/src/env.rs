@@ -14,6 +14,8 @@ pub type EnvMap = BTreeMap<String, String>;
 
 static LOGIN_ENV: OnceLock<EnvMap> = OnceLock::new();
 
+// Only the Unix login-shell loader (and its tests) read the shell dump.
+#[cfg_attr(not(unix), allow(dead_code))]
 const MARKER: &str = "__GLAUDE_ENV_BEGIN__";
 
 /// Variables that must never leak from Glaude's own environment into an
@@ -83,6 +85,7 @@ fn read_login_shell_env() -> anyhow::Result<EnvMap> {
     Ok(EnvMap::new())
 }
 
+#[cfg_attr(not(unix), allow(dead_code))]
 fn parse_env_dump(buf: &[u8]) -> EnvMap {
     let text = String::from_utf8_lossy(buf);
     let after = match text.find(MARKER) {
