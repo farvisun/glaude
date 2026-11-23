@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Glaude: a desktop app for Claude Code and Codex, built for Persian</title>
+		<meta
+			name="description"
+			content="Glaude is a fast, open-source desktop app for Claude Code and Codex. Run agents side by side, approve edits in place, review changes, and read Persian and other right-to-left text the right way round."
+		/>
+		<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+		<meta name="theme-color" content="#0b0c0f" media="(prefers-color-scheme: dark)" />
+		<meta name="color-scheme" content="light dark" />
+		<link rel="canonical" href="https://farvisun.github.io/glaude/" />
+		<link rel="icon" type="image/png" href="assets/img/favicon.png" />
+		<link rel="apple-touch-icon" href="assets/img/icon.png" />
+		<meta property="og:type" content="website" />
+		<meta property="og:title" content="Glaude: Claude Code and Codex on your desktop" />
+		<meta property="og:description" content="Agents side by side, approvals in place, changes you can review, and Persian that reads right to left. Free and open source." />
+		<meta property="og:url" content="https://farvisun.github.io/glaude/" />
+		<meta property="og:image" content="https://farvisun.github.io/glaude/assets/img/og.png" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<link rel="preload" href="assets/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin />
+		<link rel="stylesheet" href="styles.css" />
+		<script type="application/ld+json">
+			{
+				"@context": "https://schema.org",
+				"@type": "SoftwareApplication",
+				"name": "Glaude",
+				"applicationCategory": "DeveloperApplication",
+				"operatingSystem": "macOS, Windows, Linux",
+				"license": "https://www.apache.org/licenses/LICENSE-2.0",
+				"offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+				"url": "https://farvisun.github.io/glaude/",
+				"downloadUrl": "https://github.com/farvisun/glaude/releases/latest"
+			}
+		</script>
+	</head>
+	<body>
+		<a class="skip" href="#main">Skip to content</a>
+		<header class="nav">
+			<div class="wrap nav-inner">
+				<a class="brand" href="#top" aria-label="Glaude home"><img src="assets/img/icon.png" alt="" width="28" height="28" /><span>Glaude</span></a>
+				<nav aria-label="Sections">
+					<a href="#rtl">Persian &amp; RTL</a>
+					<a href="#features">Features</a>
+					<a href="#themes">Themes</a>
+					<a href="#download">Download</a>
+					<a href="#faq">FAQ</a>
+				</nav>
+				<a class="btn btn-ghost btn-sm gh" href="https://github.com/farvisun/glaude" aria-label="Glaude on GitHub"><svg class="mark" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"/></svg><span>GitHub</span></a>
+			</div>
+		</header>
+
+		<main id="main">
+			<section class="hero" id="top">
+				<div class="wrap hero-inner">
+					<a class="pill" href="https://github.com/farvisun/glaude/releases/latest" data-release-pill
+						><span class="dot"></span><span data-release-label>Version 0.1.0 is out</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a
+					>
+					<h1>The desktop app for<br />Claude Code and Codex.</h1>
+					<p class="lead">
+						Run your agents side by side, approve their edits in place, review what they changed, and read Persian the right way round. Glaude drives the CLIs already
+						installed and signed in on your computer. No API key, no extra login.
+					</p>
+					<div class="cta">
+						<a class="btn btn-primary btn-lg" href="#download" data-primary-download><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/></svg><span data-primary-label>Download</span></a>
+						<a class="btn btn-outline btn-lg" href="https://github.com/farvisun/glaude"><svg class="mark" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"/></svg><span>View source</span></a>
+					</div>
+					<p class="fine">Free and open source under Apache-2.0 · macOS, Windows and Linux</p>
+				</div>
+				<div class="wrap">
+					<figure class="window shot-hero">
+						<div class="chrome" aria-hidden="true"><i></i><i></i><i></i><span>Glaude</span></div>
+						<picture>
+							<source srcset="assets/img/rtl-dark.webp" media="(prefers-color-scheme: dark)" />
+							<img
+								src="assets/img/rtl-light.webp"
+								width="2000"
+								height="1250"
+								alt="Glaude with a Persian conversation: the prompt and reply read right to left, code stays left to right, and the plan panel lists the agent's steps."
+								fetchpriority="high"
+							/>
+						</picture>
+					</figure>
+				</div>
+			</section>
+
+			<section class="strip" aria-label="Highlights">
+				<div class="wrap strip-inner">
+					<div><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/></svg><span><b>Your subscription.</b> Uses each CLI's own login.</span></div>
+					<div><svg viewBox="0 0 24 24" aria-hidden="true"><rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/></svg><span><b>Keeps working.</b> Agents run on when the window closes.</span></div>
+					<div><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg><span><b>Right to left.</b> Per-block direction, Estedad font.</span></div>
+					<div><svg viewBox="0 0 24 24" aria-hidden="true"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></svg><span><b>Native app.</b> Rust core, small and fast.</span></div>
+				</div>
+			</section>
+
+			<section class="section" id="rtl">
+				<div class="wrap split">
+					<div class="copy">
+						<p class="eyebrow">Persian &amp; right-to-left</p>
+						<h2>Finally, Persian that reads the right way round.</h2>
+						<p>
+							Terminals have no bidi support, so Persian comes out reversed and lines that mix Persian and English jump around. Glaude gives every paragraph, list and
+							table cell its own direction, keeps code left to right, isolates Latin words inside Persian sentences, and sets Persian in Estedad.
+						</p>
+						<ul class="ticks">
+							<li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>A block is right-to-left when most of its letters are, even when it starts with an English word.</li>
+							<li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>The message box switches direction as you type.</li>
+							<li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>History search folds ي/ك, ZWNJ and Persian digits, so you find what you wrote.</li>
+						</ul>
+					</div>
+					<div class="compare" aria-label="The same Persian prompt in a terminal and in Glaude">
+						<div class="pane term">
+							<div class="pane-head"><span class="tag"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 11 2-2-2-2"/><path d="M11 13h4"/><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/></svg>In a terminal</span></div>
+							<p class="bidi-broken" lang="fa">سلام! تشخیص جهت متن خراب است. وقتی جمله با Claude شروع می‌شود کل پاراگراف چپ‌چین می‌شود.</p>
+							<p class="bidi-broken" lang="fa">۱. حروف داخل code و URLها حساب نشوند</p>
+						</div>
+						<div class="pane good">
+							<div class="pane-head"><span class="tag ok"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>In Glaude</span></div>
+							<p dir="rtl" lang="fa">سلام! تشخیص جهت متن خراب است. وقتی جمله با <bdi>Claude</bdi> شروع می‌شود کل پاراگراف چپ‌چین می‌شود.</p>
+							<p dir="rtl" lang="fa">۱. حروف داخل <code>code</code> و <bdi>URL</bdi>ها حساب نشوند</p>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<section class="section alt" id="features">
+				<div class="wrap">
+					<div class="head">
+						<p class="eyebrow">Features</p>
+						<h2>Everything around the agent, in one window.</h2>
+						<p>Glaude is a full workspace for Claude Code and Codex: conversations, approvals, changes, terminals and accounts, without leaving the app.</p>
+					</div>
+					<div class="grid">
+						<article class="card"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 10a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 14.286V4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/><path d="M20 9a2 2 0 0 1 2 2v10.286a.71.71 0 0 1-1.212.502l-2.202-2.202A2 2 0 0 0 17.172 19H10a2 2 0 0 1-2-2v-1"/></svg><h3>Claude Code and Codex</h3><p>Both CLIs side by side: streaming replies, thinking, tool calls, plans, subagents and workflows.</p></article>
+						<article class="card"><svg viewBox="0 0 24 24" aria-hidden="true"><rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/></svg><h3>Agents keep working</h3><p>A background host owns the agents. Close the window and running turns, queues and scheduled resumes go on.</p></article>
+						<article class="card"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg><h3>Approve in place</h3><p>Permission cards with the diff, right in the conversation. Allow once, always, or deny with a note.</p></article>
+						<article class="card"><svg viewBox="0 0 24 24" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M12 3v18"/></svg><h3>Splits and tabs</h3><p>Up to eight panes, each with its own tabs. Drag a tab to an edge to split, and see at a glance who needs you.</p></article>
+						<article class="card"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 11 2-2-2-2"/><path d="M11 13h4"/><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/></svg><h3>Terminal panel</h3><p>A bottom panel like VS Code: tabs, splits, resize and maximize, plus each CLI's own terminal UI.</p></article>
+						<article class="card"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><line x1="6" x2="6" y1="9" y2="21"/></svg><h3>Changes and pull requests</h3><p>Review uncommitted work or the whole branch, leave notes on lines, commit, push and open a pull request.</p></article>
+						<article class="card"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6a9 9 0 0 0-9 9V3"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/></svg><h3>Worktrees</h3><p>Start a conversation on its own branch in a new git worktree, with setup, cleanup and actions from <code>.glaude.json</code>.</p></article>
+						<article class="card"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><path d="M16 3.128a4 4 0 0 1 0 7.744"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><circle cx="9" cy="7" r="4"/></svg><h3>Accounts and limits</h3><p>Many Claude and Codex accounts with plans, 5-hour and weekly limits, token usage, and resume when a limit resets.</p></article>
+						<article class="card"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 5a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h2.5a1.5 1.5 0 0 1 1.2.6l.6.8a1.5 1.5 0 0 0 1.2.6z"/><path d="M3 8.268a2 2 0 0 0-1 1.738V19a2 2 0 0 0 2 2h11a2 2 0 0 0 1.732-1"/></svg><h3>Projects</h3><p>Group conversations into projects with a colour, several folders and their own defaults for new chats.</p></article>
+						<article class="card"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg><h3>History search</h3><p>Full-text search over every past prompt and reply of both tools, ranked by how often you open them.</p></article>
+						<article class="card"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg><h3>Proxies</h3><p>Saved HTTP and SOCKS proxies for the app, an account, a project or one conversation, with a Check button.</p></article>
+						<article class="card"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3"/></svg><h3>Command palette</h3><p>Every action, open agent and saved prompt one shortcut away, with prompts that ask for their own blanks.</p></article>
+					</div>
+					<p class="more">
+						Also: cross-review by the other tool, side chats, rewind and fork, usage and cost per project, desktop notifications, a menu-bar status item, and saved prompts.
+					</p>
+				</div>
+			</section>
+
+			<section class="section">
+				<div class="wrap showcase">
+					<div class="row">
+						<div class="copy">
+							<p class="eyebrow">Agents board</p>
+							<h3 class="h2">Every agent at a glance.</h3>
+							<p>See which agents need you, which are working and which have finished, and answer approvals and questions without opening each tab. One shortcut jumps to the next agent that is waiting.</p>
+						</div>
+						<figure class="window"><img src="assets/img/agents.webp" width="2000" height="1250" loading="lazy" alt="The Agents board with columns for agents that need you, are working, or have finished." /></figure>
+					</div>
+					<div class="row flip">
+						<div class="copy">
+							<p class="eyebrow">Changes</p>
+							<h3 class="h2">Review before you commit.</h3>
+							<p>Uncommitted changes, the branch against its base, or a single commit. Filter by path, leave notes on lines and send them back as a review, then commit, push and create the pull request.</p>
+						</div>
+						<figure class="window"><img src="assets/img/changes.webp" width="2000" height="1250" loading="lazy" alt="The Changes tab with a unified diff, commit, push and create-PR buttons." /></figure>
+					</div>
+					<div class="row">
+						<div class="copy">
+							<p class="eyebrow">Terminal</p>
+							<h3 class="h2">A terminal where you expect it.</h3>
+							<p>Shells in the conversation's folder, side by side, in a panel that stays put while you switch tabs. Give it its own theme: a dark terminal under a light window works fine.</p>
+						</div>
+						<figure class="window"><img src="assets/img/terminal.webp" width="2000" height="1250" loading="lazy" alt="A conversation with the terminal panel open below it, split into two shells." /></figure>
+					</div>
+					<div class="row flip">
+						<div class="copy">
+							<p class="eyebrow">Accounts</p>
+							<h3 class="h2">All your accounts in one place.</h3>
+							<p>Claude and Codex accounts with their plans, what is left of the 5-hour and weekly limits, and tokens used. Add one with the tool's own login; pick the account for each conversation.</p>
+						</div>
+						<figure class="window"><img src="assets/img/accounts.webp" width="2000" height="1250" loading="lazy" alt="The Accounts page listing accounts with plan, limits left and token usage." /></figure>
+					</div>
+				</div>
+			</section>
+
+			<section class="section alt" id="themes">
+				<div class="wrap">
+					<div class="head">
+						<p class="eyebrow">Themes</p>
+						<h2>Make it yours.</h2>
+						<p>
+							About 25 light and dark themes colour the window, the code and the terminal: GitHub, One, Solarized, Dracula, Tokyo Night, Nord, Catppuccin, Rosé Pine,
+							Gruvbox, Everforest and Glaude's own. Pick any accent, give chats and terminals their own theme, or import one from VS Code, iTerm2, Ghostty, kitty or
+							Windows Terminal.
+						</p>
+					</div>
+					<figure class="window wide"><img src="assets/img/themes.webp" width="2000" height="833" loading="lazy" alt="The same conversation in six themes: GitHub Light, Dracula, Catppuccin Latte, Tokyo Night, Rosé Pine Dawn and Nord." /></figure>
+				</div>
+			</section>
+
+			<section class="section">
+				<div class="wrap">
+					<div class="head">
+						<p class="eyebrow">Privacy</p>
+						<h2>Your tools, your logins, your computer.</h2>
+					</div>
+					<div class="grid three">
+						<article class="card plain"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/></svg><h3>No API key</h3><p>Glaude starts the <code>claude</code> and <code>codex</code> CLIs you already use, with their own sign-in. It warns you if a session would bill an API key instead.</p></article>
+						<article class="card plain"><svg viewBox="0 0 24 24" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg><h3>No credential reads</h3><p>Glaude never reads your keychain or tokens. The CLIs handle their own authentication; Glaude only shows what they report.</p></article>
+						<article class="card plain"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m18 16 4-4-4-4"/><path d="m6 8-4 4 4 4"/><path d="m14.5 4-5 16"/></svg><h3>Local and open</h3><p>Everything runs on your machine; there is no Glaude server. The source is on GitHub under Apache-2.0, so you can check it yourself.</p></article>
+					</div>
+				</div>
+			</section>
+
+			<section class="section alt" id="download">
+				<div class="wrap">
+					<div class="head">
+						<p class="eyebrow">Download</p>
+						<h2>Get Glaude <span data-version></span></h2>
+						<p>Install the <code>claude</code> and/or <code>codex</code> CLI and sign in once. Glaude finds them on your <code>PATH</code>.</p>
+					</div>
+					<div class="grid three downloads">
+						<article class="card dl" data-os="mac">
+							<h3>macOS</h3>
+							<p class="sub">Universal (Apple silicon and Intel) · macOS 11 or later</p>
+							<a class="btn btn-primary" data-asset="dmg" href="https://github.com/farvisun/glaude/releases/latest"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/></svg>Download .dmg</a>
+							<p class="note">The app isn't notarized yet. On first launch, open <b>System Settings → Privacy &amp; Security</b> and choose <b>Open Anyway</b>.</p>
+						</article>
+						<article class="card dl" data-os="win">
+							<h3>Windows</h3>
+							<p class="sub">64-bit · Windows 10 or later</p>
+							<a class="btn btn-primary" data-asset="exe" href="https://github.com/farvisun/glaude/releases/latest"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/></svg>Download installer</a>
+							<p class="alts">Also as <a class="link" data-asset="msi" href="https://github.com/farvisun/glaude/releases/latest">.msi</a></p>
+						</article>
+						<article class="card dl" data-os="linux">
+							<h3>Linux</h3>
+							<p class="sub">64-bit · WebKitGTK 4.1</p>
+							<a class="btn btn-primary" data-asset="appimage" href="https://github.com/farvisun/glaude/releases/latest"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/></svg>Download AppImage</a>
+							<p class="alts">Also as <a class="link" data-asset="deb" href="https://github.com/farvisun/glaude/releases/latest">.deb</a><span class="sep"> · </span><a class="link" data-asset="rpm" href="https://github.com/farvisun/glaude/releases/latest">.rpm</a></p>
+						</article>
+					</div>
+					<p class="more center">All files and SHA-256 checksums are on the <a href="https://github.com/farvisun/glaude/releases">releases page</a>.</p>
+				</div>
+			</section>
+
+			<section class="section" id="faq">
+				<div class="wrap narrow">
+					<div class="head">
+						<p class="eyebrow">FAQ</p>
+						<h2>Questions</h2>
+					</div>
+					<details>
+						<summary>Is Glaude made by Anthropic or OpenAI?</summary>
+						<p>No. Glaude is an independent open-source project. It runs the official Claude Code and Codex command-line tools on your computer.</p>
+					</details>
+					<details>
+						<summary>Do I need an API key or a separate account?</summary>
+						<p>No. Glaude uses the CLIs as they are already set up and signed in, so your existing Claude or ChatGPT subscription applies.</p>
+					</details>
+					<details>
+						<summary>Is it only for Persian?</summary>
+						<p>No. Glaude works in any language; it is simply the first desktop app for these tools that gets right-to-left text right, for Persian, Arabic, Hebrew and Urdu alike.</p>
+					</details>
+					<details>
+						<summary>Where is my data?</summary>
+						<p>On your computer. Conversations are the CLIs' own transcripts; Glaude keeps its settings and a search index locally and has no server.</p>
+					</details>
+					<details>
+						<summary>Can I use several Claude or Codex accounts?</summary>
+						<p>Yes. Add each with the tool's own login, see their limits side by side, and choose the account per conversation or per project.</p>
+					</details>
+					<details>
+						<summary>How do I report a bug or ask for a feature?</summary>
+						<p>Open an issue on <a href="https://github.com/farvisun/glaude/issues">GitHub</a>. Security problems go through the private report described in <a href="https://github.com/farvisun/glaude/blob/master/SECURITY.md">SECURITY.md</a>.</p>
+					</details>
+				</div>
+			</section>
+		</main>
+
+		<footer class="footer">
+			<div class="wrap footer-inner">
+				<div class="brand"><img src="assets/img/icon.png" alt="" width="22" height="22" /><span>Glaude</span></div>
+				<nav aria-label="Footer">
+					<a href="https://github.com/farvisun/glaude">GitHub</a>
+					<a href="https://github.com/farvisun/glaude/releases">Releases</a>
+					<a href="https://github.com/farvisun/glaude/blob/master/LICENSE">License</a>
+					<a href="https://github.com/farvisun/glaude/issues">Issues</a>
+				</nav>
+				<p class="legal">
+					© 2026 Glaude contributors. Apache-2.0. Claude is a trademark of Anthropic, PBC; Codex is a trademark of OpenAI. Glaude is not affiliated with or endorsed by
+					either. Icons: Lucide (ISC). Fonts: Inter and Estedad (SIL OFL).
+				</p>
+			</div>
+		</footer>
+		<script src="main.js" defer></script>
+	</body>
+</html>
