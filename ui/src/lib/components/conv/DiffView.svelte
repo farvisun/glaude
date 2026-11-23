@@ -125,24 +125,27 @@
 							<tr class="{cls[l.t]} group/ln">
 								{#if l.t === "hunk"}
 									<td colspan="3" class="px-2">{l.text}</td>
-								{:else if onLine}
-									<td class="ln p-0" colspan="2">
-										<button
-											class="hover:bg-primary/15 hover:text-primary relative flex w-full justify-end gap-2 px-2"
-											aria-label="Comment on line {l.b ?? l.a}"
-											title="Comment on this line"
-											onclick={() => {
-												const k = lineKey(l);
-												if (k) onLine(d.path, k[0], k[1], l.text);
-											}}
-										>
-											<span class="text-primary absolute start-1 hidden group-hover/ln:inline">+</span>
-											<span class="w-[3ch]">{l.a ?? ""}</span><span class="w-[3ch]">{l.b ?? ""}</span>
-										</button>
-									</td>
 								{:else}
-									<td class="ln">{l.a ?? ""}</td>
-									<td class="ln">{l.b ?? ""}</td>
+									{#if onLine}
+										<td class="ln p-0" colspan="2">
+											<button
+												class="hover:bg-primary/15 hover:text-primary relative flex w-full justify-end gap-2 px-2"
+												aria-label="Comment on line {l.b ?? l.a}"
+												title="Comment on this line"
+												onclick={() => {
+													const k = lineKey(l);
+													if (k) onLine(d.path, k[0], k[1], l.text);
+												}}
+											>
+												<span class="text-primary absolute start-1 hidden group-hover/ln:inline">+</span>
+												<span class="w-[3ch]">{l.a ?? ""}</span><span class="w-[3ch]">{l.b ?? ""}</span>
+											</button>
+										</td>
+									{:else}
+										<td class="ln">{l.a ?? ""}</td>
+										<td class="ln">{l.b ?? ""}</td>
+									{/if}
+									<!-- The code itself (also when line numbers take review notes). -->
 									<td class="px-2 whitespace-pre-wrap"
 										><span class="sign">{l.t === "add" ? "+" : l.t === "del" ? "−" : " "}</span>{l.text}</td
 									>
