@@ -6,8 +6,7 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
 
-use anyhow::{Context, Result};
-use regex::Regex;
+use anyhow::Result;
 use rusqlite::Connection;
 
 use crate::tool::{is_symlink, Account, Ctx, Kind};
@@ -64,9 +63,10 @@ fn same_dir(a: &Path, b: &Path) -> bool {
 /// Homes of claude/codex processes running now, from their environment
 /// (`ps eww`). Only the agents count, not programs started from their shells.
 pub fn running_homes(env_key: &str) -> HashSet<String> {
-    let mut homes = HashSet::new();
     #[cfg(unix)]
     {
+        use regex::Regex;
+        let mut homes = HashSet::new();
         let out = std::process::Command::new("ps")
             .args(["eww", "-ax", "-o", "command="])
             .output();
@@ -91,12 +91,14 @@ pub fn running_homes(env_key: &str) -> HashSet<String> {
                 homes.insert(c[1].trim_end_matches('/').to_string());
             }
         }
+        homes
     }
     #[cfg(not(unix))]
     {
-        let _ = (env_key, Regex::new("").ok());
+        // No `ps eww` on Windows.
+        let _ = env_key;
+        HashSet::new()
     }
-    homes
 }
 
 pub fn is_running(kind: Kind, acct: &Account) -> bool {
@@ -260,6 +262,7 @@ fn merge_into(src: &Path, dst: &Path, backup: &Path, deep: bool) -> Result<()> {
 
 #[cfg(unix)]
 fn make_symlink(target: &Path, link: &Path) -> Result<()> {
+    use anyhow::Context;
     std::os::unix::fs::symlink(target, link)
         .with_context(|| format!("linking {} -> {}", link.display(), target.display()))
 }
